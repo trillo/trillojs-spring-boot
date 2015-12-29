@@ -6,7 +6,7 @@ ToDo.ListModel = Trillo.Model.extend({
   loadData: function() {
     var deferred = $.Deferred();
     $.ajax({
-      url: "/todoList",
+      url: "/taskList",
       type: 'get',
       datatype : "application/json"
     }).done($.proxy(this.dataLoaded, this, deferred));
@@ -15,7 +15,6 @@ ToDo.ListModel = Trillo.Model.extend({
   
   dataLoaded: function(deferred, data) {
     this.data = data;
-    this.controller().modelLoaded(this);
     deferred.resolve(this);
   }
 });
