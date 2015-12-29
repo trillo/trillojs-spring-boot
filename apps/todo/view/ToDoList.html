@@ -1,0 +1,41 @@
+<script spec="view" type="application/json">
+  {
+    "ToDoList" : {
+      "container" : "main-container",
+      "impl" : "Trillo.CollectionView",
+      "modelSpec" : {
+        "impl" : "ToDo.ListModel",
+        "observeChanges" : true
+      },
+      "type" : "table"
+    }
+  }
+</script>
+
+<div class="to-do-list-container">
+  <div class="to-do-list-tool-bar js-toolbar-tools">
+    <button class="btn btn-default btn-xs" type="button" name="newTask">New Task</button>
+  </div>
+	<div class="trillo-canvas js-grid">
+	  <div class="trillo-list-header js-heading-row" style="display:none">
+	    <div class="trillo-header-c js-header-c trillo-sortable" name="completed" aria-sort="" style="width:15%">
+	      Completed
+	    </div>
+	    <div class="trillo-header-c js-header-c trillo-sortable" name="priority" aria-sort="" style="width:15%">
+	      Priority
+	    </div>
+	    <div class="trillo-header-c js-header-c trillo-sortable" name="taskName" aria-sort="" style="width:70%">
+	      Task
+	    </div>
+	  </div>
+	  <div class="trillo-list-row js-content-row" style="display:none">
+	    <div class="trillo-content-c js-content-c" name="completed" style="width:15%">
+	    </div>
+	    <div class="trillo-content-c js-content-c" name="priority" style="width:15%">
+	    </div>
+	    <div class="trillo-content-c js-content-c" name="taskName" style="width:70%">
+	    </div>
+	  </div>
+	</div>
+</div>
+
