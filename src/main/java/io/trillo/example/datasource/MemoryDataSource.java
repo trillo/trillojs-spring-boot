@@ -85,6 +85,7 @@ public class MemoryDataSource {
       task.setUid("Task:" + UUID.randomUUID());
       task.setTaskName("Task " + (i+1));
       task.setPriority("P" + ((i % 3) + 1));
+      task.setCompleted(i % 2 == 0);
       taskList.add(task);
     }
   }

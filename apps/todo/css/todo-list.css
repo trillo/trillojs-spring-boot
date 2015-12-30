@@ -257,3 +257,6 @@ form {
   height: 34px;
 }
 
+.todo-list-completed {
+  text-align: center;
+}

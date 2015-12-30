@@ -21,6 +21,14 @@ ToDo.ToDoListC = Trillo.Controller.extend({
     }
     
     return this._super(actionName, obj, infoItem);
-  }
+  },
+  
+  afterPost: function(result, view) {
+    this.showResult(result);
+    if (view.name === "NewTaskForm" && result.status === "success") {
+      var newTask = result.props.task;
+      this.model().newTaskAdded(newTask);
+    }
+  },
 
 });

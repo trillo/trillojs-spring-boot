@@ -16,5 +16,10 @@ ToDo.ListModel = Trillo.Model.extend({
   dataLoaded: function(deferred, data) {
     this.data = data;
     deferred.resolve(this);
+  },
+  
+  newTaskAdded: function(newTask) {
+    this.data.push(newTask);
+    this.triggerAdded(newTask);
   }
 });

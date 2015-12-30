@@ -5,7 +5,8 @@
       "impl" : "Trillo.CollectionView",
       "modelSpec" : {
         "impl" : "ToDo.ListModel",
-        "observeChanges" : true
+        "observeChanges" : true,
+        "newItemsAtEnd" : true
       },
       "type" : "table"
     }
@@ -29,7 +30,8 @@
 	    </div>
 	  </div>
 	  <div class="trillo-list-row js-content-row" style="display:none">
-	    <div class="trillo-content-c js-content-c" name="completed" style="width:15%">
+	    <div class="trillo-content-c js-content-c todo-list-completed" style="width:15%">
+	    	<input type="checkbox" name="completed">
 	    </div>
 	    <div class="trillo-content-c js-content-c" name="priority" style="width:15%">
 	    </div>
