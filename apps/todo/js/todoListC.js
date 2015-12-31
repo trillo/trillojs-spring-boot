@@ -31,4 +31,16 @@ ToDo.ToDoListC = Trillo.Controller.extend({
     }
   },
 
+  fieldChanged: function(name, value, valid, view, obj) {
+    var self = this;
+    if (name === "completed") {
+      $.ajax({
+        url: "/updateCompleted?uid=" + obj.uid + "&completed=" + value,
+        type: 'get',
+        datatype : "application/json"
+      }).done(function(result) {
+        self.showResult(result);
+      });
+    }
+  }
 });

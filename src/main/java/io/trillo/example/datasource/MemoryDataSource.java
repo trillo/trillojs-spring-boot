@@ -63,15 +63,21 @@ public class MemoryDataSource {
    * @param uid - uid of the task to be marked completed (true or false)
    * @param completed - a boolean, 'true' means the task is completed else uncompleted
    */
-  public void completeTask(String uid, boolean completed) {
+  public Result completeTask(String uid, boolean completed) {
+    Result r = new Result();
     if (uid == null) {
-      throw new RuntimeException("uid can not be null");
+      r.setMessage("uid can not be null");
+      r.setStatus(Result.FAILED);
+      return r;
     }
     for (Task task : taskList) {
       if (uid.equals(task.getUid())) {
         task.setCompleted(completed);
+        r.setMessage("'" + task.getTaskName() + "' marked as " + (completed ? "completed" : "uncompleted"));
+        r.setStatus(Result.SUCCESS);
       }
     }
+    return r;
   }
   
   /**
