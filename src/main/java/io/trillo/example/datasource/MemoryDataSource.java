@@ -14,7 +14,7 @@ public class MemoryDataSource {
 
   private static MemoryDataSource _memoryDataSource = null;
   private List<Task> taskList;
-  private int INITIAL_NUMBER_OF_SAMPLES = 5;
+  private int INITIAL_NUMBER_OF_SAMPLES = 12;
   /**
    * Singleton pattern.
    */
@@ -89,8 +89,8 @@ public class MemoryDataSource {
     for (int i=0; i<INITIAL_NUMBER_OF_SAMPLES; i++) {
       Task task = new Task();
       task.setUid("Task:" + UUID.randomUUID());
-      task.setTaskName("Task " + (i+1));
       task.setPriority("P" + ((i % 3) + 1));
+      task.setTaskName("Task " + (i+1) + " - this is a priority "  + ((i % 3) + 1) + " task");
       task.setCompleted(i % 2 == 0);
       taskList.add(task);
     }
