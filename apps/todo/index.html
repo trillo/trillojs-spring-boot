@@ -15,8 +15,7 @@
 <link rel="stylesheet" href="/css/trillo-view.css" type="text/css" />
 <link rel="stylesheet" href="/css/todo-list.css" type="text/css" />
 
-<body class="body_unknown fixed-top-bar top-tabs-bar-on logged-in" 
-style="font-size: 13px; color: #222222; background-color: #ffffff">
+<body>
 
     <script spec="view" type="application/json">
       {
@@ -26,92 +25,88 @@ style="font-size: 13px; color: #222222; background-color: #ffffff">
         }
       }
     </script>
-
-    <div class="trillo-application js-application">
-        <div class="top-bar">
-            <div class="top-bar-inner">
-              <div class="top-bar-left">
-                <a nm="home" href="/" title="Application Catalog Home Page">
-                  <div class="main-logo-bg">
-                  </div>
-                  <div class="main-logo-div">
-                  </div>
-                </a>
-                <a href="/" title="Application Home Page">
-                  <div class="trillo-on-app-ready main-app-name">
-                    TrilloJS ToDo List
-                  </div>
-                </a>
-              </div>
-              <div class="top-bar-center">
-                <div class="top-bar-subnav-container">
-                  <div nm="top-nav-container" class="top-bar-subnav js-container">
-                  </div>
-                </div>
-              </div>
-              <div class="top-bar-right">
-                <div class="top-bar-btn">
-                  <a href="/">
-                    <div class="home-icon">
-                    </div>
-                  </a>
-                </div>
-                <div class="top-bar-btn">
-                  <a nm="help" class="help">
-                    <span aria-hidden="true" class="glyphicon glyphicon-question-sign"></span>
-                  </a>
-                </div>
-                <div style="visiblity: hidden" class="trillo-busy-indicator progress js-busy-indicator">
-                 <div class="progress-bar progress-bar-striped active js-progress-bar" aria-valuenow="100" aria-valuemin="0"
-                 aria-valuemax="100" style="width: 100%">
-                  </div>
-                </div>
-              </div>
-            </div>
-              <div style="display:none" class="trillo-alert alert alert-danger js-alert">
-              <button type="button" nm="close" class="close">&#215;</button>
-              <h4 class="js-title">
-                Error!
-              </h4>
-              <span class="js-message">Error message.</span>
-            </div>
-        </div>
     
-        <div class="main-content-area js-container" nm="main-container">
-        </div>
-        
-        <div class="trillo-dialog js-dialog-container" nm="trillo-dialog-container">
-        </div>
-        
-        <div nm="myModal" tabindex="-1" class="modal" style="display: none; z-index: 400003">
-          <div class="modal-dialog">
-            <div class="modal-content">
-              <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal">
-                <span aria-hidden="true">&#215;</span>
-                 
-                <span class="sr-only">Close</span>
-                </button>
-                <h4 nm="modalTitle" class="modal-title">
-                  Modal title
-                </h4>
-              </div>
-              <div class="modal-body">
-                <p nm="modalMessage">
-                </p>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn" data-dismiss="modal">Close</button>
-                <button nm="modalYes" display="none" class="btn">Yes</button>
-                <button nm="modalNo" display="none" class="btn">No</button>
-                <button nm="modalOK" type="button" class="btn">OK</button>
-              </div>
-            </div>
-            <!-- /.modal-content -->
-          </div>
-          <!-- /.modal-dialog -->
-        </div>
+	<nav class="navbar navbar-inverse navbar-fixed-top todo-navbar">
+	  <div class="container">
+	    <div class="navbar-header">
+	      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+	        <span class="sr-only">Toggle navigation</span>
+	        <span class="icon-bar"></span>
+	        <span class="icon-bar"></span>
+	        <span class="icon-bar"></span>
+	      </button>
+	      <a nm="home" href="/" title="Application Catalog Home Page">
+	        <div class="main-logo-bg">
+	        </div>
+	        <div class="trillo-on-app-ready main-app-name">
+	          TrilloJS ToDo List
+	        </div>
+	      </a>
+	    </div>
+	    <div id="navbar" class="navbar-collapse collapse">
+	      <ul class="nav navbar-nav navbar-right">
+		      <li class="dropdown">
+			    <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" 
+			    	aria-haspopup="true" aria-expanded="false">Menu1 <span class="caret"></span></a>
+			    <ul class="dropdown-menu">
+			      <li><a href="#">Menu Item1</a></li>
+			      <li><a href="#">Menu Item2</a></li>
+			    </ul>
+			  </li>
+			  <li><a href="#">Menu2</a></li>
+			  <li><a href="https://github.com/trillo/trillojs"> Trillo JS on GitHub</a></li>
+	      </ul>
+	    </div>
+	    <div style="visiblity: hidden" class="trillo-busy-indicator progress js-busy-indicator">
+		  <div class="progress-bar progress-bar-striped active js-progress-bar" aria-valuenow="100" aria-valuemin="0"
+		  aria-valuemax="100" style="width: 100%">
+		  </div>
+		</div>
+	  </div>
+	  <div style="display:none" class="trillo-alert alert alert-danger js-alert">
+	     <button type="button" nm="close" class="close">&#215;</button>
+	     <h4 class="js-title">
+	       Error!
+	     </h4>
+	     <span class="js-message">Error message.</span>
+	   </div>
+	</nav>
+
+    <div class="trillo-application js-application" nm="main-container">
+     
     </div>
+    
+    <div class="trillo-dialog js-dialog-container" nm="trillo-dialog-container">
+    </div>
+        
+	<div nm="myModal" tabindex="-1" class="modal" style="display: none; z-index: 400003">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal">
+	        <span aria-hidden="true">&#215;</span>
+	         
+	        <span class="sr-only">Close</span>
+	        </button>
+	        <h4 nm="modalTitle" class="modal-title">
+	          Modal title
+	        </h4>
+	      </div>
+	      <div class="modal-body">
+	        <p nm="modalMessage">
+	        </p>
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn" data-dismiss="modal">Close</button>
+	        <button nm="modalYes" display="none" class="btn">Yes</button>
+	        <button nm="modalNo" display="none" class="btn">No</button>
+	        <button nm="modalOK" type="button" class="btn">OK</button>
+	      </div>
+	    </div>
+	    <!-- /.modal-content -->
+	  </div>
+	  <!-- /.modal-dialog -->
+	</div>
     
 </body>
 <script type="text/javascript" src="/lib/js/jquery-1.11.1.js"></script>
