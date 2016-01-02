@@ -21,7 +21,17 @@ form {
 }
 
 .todo-navbar .navbar-right {
-  padding-right: 20px;
+  padding-right: 10px;
+}
+
+.todo-navbar .navbar-header {
+  margin-right: 0px;
+  margin-left: 0px;
+}
+
+.todo-navbar .navbar-toggle {
+  margin-right: 0px;
+  padding-right: 0px;  
 }
 
 .container {
@@ -40,7 +50,7 @@ form {
   background-image:url("/img//logo-stamp.png");
   width:40px;
   height:33px;
-  margin:10px 10px 0px 15px;
+  margin:10px 10px 0px 0px;
 }
 
 
@@ -58,7 +68,7 @@ form {
 .to-do-list-container {
   max-width: 700px;
   margin: 15px auto;
-  padding: 0px 10px;
+  padding: 0px 0px;
 }
 
 .to-do-list-tool-bar {
