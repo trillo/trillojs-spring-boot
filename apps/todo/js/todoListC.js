@@ -6,8 +6,14 @@ ToDo.ToDoListC = Trillo.Controller.extend({
  
   handleAction: function(actionName, obj, infoItem) {
     if (actionName === "newTask") {
+      // Creates new form specification as JSON.
+      // Builds new view using showView method.
+      // New view is shown inside 'trillo-dialog-container'
+      // which is a 'div' with css-style that it will be seen
+      // as a center aligned pop-up.
       this.showView({
         name: "NewTaskForm",
+        impl: "Trillo.FormView",
         postUrl: "/newTask",
         type: Trillo.ViewType.Form,
         container: 'trillo-dialog-container',
