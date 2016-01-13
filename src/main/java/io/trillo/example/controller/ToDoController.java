@@ -28,7 +28,7 @@ public class ToDoController {
     return MemoryDataSource.getInstance().getTaskList();
   }
   
-  @RequestMapping(value = "newTask", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequestMapping(value = "/newTask", produces = MediaType.APPLICATION_JSON_VALUE)
   public @ResponseBody Result newUser(@RequestBody @Valid  Task task, BindingResult bindingRes) {
     return MemoryDataSource.getInstance().addNewTask(task.getTaskName(), task.getPriority());
   }
@@ -37,5 +37,10 @@ public class ToDoController {
   public @ResponseBody Result updateCompleted(@RequestParam(required = true, value = "uid") String uid,
       @RequestParam(required = true, value = "completed") boolean completed) {
     return MemoryDataSource.getInstance().completeTask(uid, completed);
+  }
+  
+  @RequestMapping(value = "/ToDoList", method = RequestMethod.GET)
+  public String todoList() {
+    return "index.html";
   }
 }
