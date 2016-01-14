@@ -1,0 +1,31 @@
+{
+  "name": "trillojs-spring-boot",
+  "version": "1.0.0",
+  "description": "Example application for Trillo JS tutorial",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trillo/trillojs-spring-boot.git"
+  },
+  "keywords": [
+    "JavaScript",
+    "JS",
+    "Framework",
+    "MVC",
+    "Single Page"
+  ],
+  "author": "Collager Inc.",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/trillo/trillojs-spring-boot/issues"
+  },
+  "homepage": "https://github.com/trillo/trillojs-spring-boot#readme",
+  "devDependencies": {
+    "grunt": "~0.4.5",
+    "grunt-contrib-clean": "~0.7.0",
+    "grunt-contrib-compress": "~0.14.0",
+    "grunt-contrib-concat": "~0.5.1",
+    "grunt-contrib-jshint": "~0.11.2",
+    "grunt-contrib-uglify": "~0.11.0",
+    "load-grunt-tasks": "~3.4.0"
+  }
+}
