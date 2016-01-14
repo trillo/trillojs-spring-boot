@@ -1,0 +1,294 @@
+/* Bootstrap override */
+.nav-tabs>li>a  {
+  padding: 4px 8px;
+}
+
+/* Style used to remove something from the user view still be rendered in the background */
+ 
+.trillo-position-outside {   
+  position: absolute;
+  left: -1000px;
+  top: 10x;
+}
+
+/* Used to show something as receded, for example when a modal dialog is shown the main panel is receded. */
+
+.trillo-content-receded {
+  position: fixed;
+  opacity: 0.5;
+  width: 100%;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+/* Until application is ready, templates and model data is mixed in, certain elements (such as with mustache template
+   may be kept invisible. They will be made visible once applicaiton is ready. When the application is ready, framework
+   adds a class called trillo-app-ready to body. */
+   
+.trillo-on-app-ready {
+  visibility: hidden;
+}
+
+.trillo-app-ready .trillo-on-app-ready  {
+  visibility: visible; 
+}
+
+.trillo-sortable {
+  cursor: pointer;
+}
+
+.trillo-clear {
+  clear: both;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+/* Container marking in preview mode */
+.trillo-container-preview-mode {
+  text-align: center;
+}
+.trillo-container-mark {
+  margin-top: 15px;
+  padding: 3px;
+  background: #ffffff;
+  color: #000000;
+  opacity: 0.5;
+  font-size:12px;
+}
+.trillo-container-preview-mode:hover {
+  border:1px dashed #000000;
+}
+
+.trillo-container-preview-mode:hover .trillo-container-mark {
+  opacity: 1;
+}
+
+/* Used to style a global progress indicator
+ * It displays the progress of an action that is applicable
+ * the current view or current selection (such as a selected object of table or detail view of the object) */
+ 
+.trillo-global-progress-indicator {
+  background-color: #ffffff;
+  border: 1px solid #cccdcc;
+  float: left;
+  font-size: 11px;
+  margin: -2px 5px 0;
+  padding: 0 5px;
+  text-align: center;
+  width: 200px;
+}
+
+.trillo-global-progress-indicator .progress {   /* progress is from bootstrap */
+  height:10px;
+  margin: 3px;
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+
+/* Used to style the progress of a task, process or action on the 
+ * selected object or specific context. This is an indicator that is close to the object such as
+ * a column of a row or top of the selected cell. It is one per object / context. */
+ 
+.trillo-object-progress-indicator {
+  margin:-40px 5% 0px;
+  font-size: 11px;
+  text-align:center;
+  position: absolute;
+  width: 90%;
+  padding: 5px;
+  background-color:#ffffff;
+  border: 1px solid #cccdcc;
+}
+
+.trillo-object-progress-indicator .progress { /* progress is from bootstrap */
+  height:10px;
+  margin: 5px;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/** Shows a busy indicator near the top right of the page */
+
+.trillo-busy-indicator {
+  width: 50px;
+  height: 8px;
+  left: 100%;
+  top: 60px;
+  margin-left: -60px;
+  position: fixed;
+  z-index: 500000;
+}
+
+.trillo-busy-indicator-small {
+  width: 16px;
+  height: 16px;
+  background-image: url('/shared/static/img/spinning-arrow.gif');
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Use for displaying <page number> of <total page>. 
+It is shown at the right bottom of a large collection view. */
+
+.trillo-pagination {
+  background-color: #787878;
+   bottom: 0;
+   color: #ffffff;
+   font-size: 10px;
+   line-height: 13px;
+   opacity: 0.5;
+   padding: 2px;
+   position: fixed;
+   right: 0;
+   text-align: center;
+   min-width: 60px;
+   z-index: 1050;
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+
+/* Style of the alert shown close to the top bar. */
+
+.trillo-alert-c {
+  position: fixed;
+  z-index:40010;
+  width: 100%;
+}
+
+.trillo-alert {
+  max-width: 600px;
+  width: 90%;
+  z-index:400010;
+  left:0;
+  top:100%;
+  margin-top: 2px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Caret style */
+
+.trillo-caret {
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom-color: #eee;
+    border-top: 4px solid #eee;
+    content: "";
+    display: inline-block;
+    height: 0;
+    vertical-align: middle;
+    width: 0;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Bootstrap drop down styles are customized. */
+
+.trillo-dropdown-menu {
+    min-width: 130px;
+    left: auto;
+}
+
+.trillo-dropdown-menu > li > a {
+    line-height: 20px;
+    white-space: nowrap;
+    margin: 8px 8px;
+    font-size: 14px;
+    padding: 4px;
+}
+
+.trillo-context-menu {
+  position: absolute;
+  z-index: 2001;
+}
+
+.trillo-context-menu .dropdown-menu { /* dropdown-menu is from bootstrap */
+  position: static;
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Canvas */
+
+.trillo-canvas {
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Dialog. */
+
+.trillo-dialog {
+  background-color: #FFFFFF;
+  border: 1px solid #CCCCCC;
+  min-width: 400px;
+  padding: 0px 20px 20px;
+  top: 60px;
+  z-index: 2000;
+  position: absolute;
+  display: none;
+}
+
+.trillo-dialog-container-shown .trillo-dialog {
+  display: block;
+}
+
+
+.trillo-dialog-button-group {
+  padding: 10px 0px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Dialog that can show scrollable content. */
+
+.trillo-scroll-dialog {
+  width: 80%;
+  left:10%;
+  position: absolute;
+  background-color: #f2f2f2;
+  z-index: 1100;
+  border: 2px solid #787878;
+  overflow:hidden;
+  bottom: 30px;
+  padding:10px;
+  height: 70%;
+  top: 15%;
+  display:none;
+}
+
+.trillo-scroll-dialog-inner {
+  overflow-y: auto;
+  background-color: #ffffff;
+}
+
+.trillo-scroll-dialog-container-shown .trillo-scroll-dialog {
+  display: block;
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Style for span that is shown as message below field (as help or error message). */
+
+.trillo-field-msg {
+  font-size: 10px;
+  line-height: 1.1em;
+  display:none;
+  margin-top: 1px;
+  float: right;
+}
+
+.trillo-has-error .trillo-field-msg {
+  display: block;
+}
+
+.trillo-has-message .trillo-field-msg {
+  display: block;
+}

@@ -1,0 +1,752 @@
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* The following styles are used to style trillo-tree and control its behavior.
+ * The visual styles can be changed (dimension and position related styles change may impact tree behavior)
+ */
+ 
+.trillo-tree-container-container {
+    height: 100%;
+    position: relative;
+}
+
+.trillo-tree-container {
+    color: #222222;
+    height: 100%;
+    overflow: hidden;
+    width: 240px;
+}
+
+
+.trillo-tree-container a:link {
+  color:#222222;
+}
+
+.trillo-tree-container a:visited {
+  color:#222222;
+}
+
+.trillo-tree {
+  width:218px
+}
+
+.trillo-tree .trillo-tree-item {
+   background-position: 0px 50%;
+   background-repeat: no-repeat;
+   cursor:pointer;
+   padding:1px 1px 1px 1px;
+   border: 1px solid transparent;
+}
+
+.trillo-tree .trillo-item-close.trillo-tree-item {
+  
+}
+
+.trillo-tree .trillo-item-open.trillo-tree-item {
+  
+}
+
+.trillo-tree .lvl0 div .trillo-item-close.trillo-tree-item:before {
+  content: "\e080";
+  padding-right: 4px;
+  font-family:"Glyphicons Halflings";
+  color: #787878;
+  font-size: 0.6em;
+  vertical-align:top;
+}
+
+.trillo-tree .lvl0 div .trillo-item-open.trillo-tree-item:before {
+  content: "\e114";
+  padding-right: 4px;
+  font-family:"Glyphicons Halflings";
+  color: #787878;
+  font-size: 0.6em;
+  vertical-align:top;
+}
+
+.trillo-tree .lvl0 div .trillo-item-open.trillo-tree-item.trillo-selected:before {
+  color: #ffffff;
+}
+
+.trillo-tree-item-tn {
+  text-align: center;
+  margin:auto;
+  width:175px;
+  margin-bottom:15px;
+  padding:4px;
+  border: 1px dotted transparent;
+}
+
+
+.trillo-tree-item-tn img {
+  border:6px solid #ffffff;
+  width:165px;
+  box-shadow: 0 1px 3px #cccccc;
+}
+
+.trillo-tree .trillo-tree-item-tn.trillo-selected  {
+  background-color: transparent;
+  border=style: dotted;
+  border-width: 3px;
+}
+
+.trillo-tree .trillo-tree-item-tn.trillo-selected  img {
+  
+}
+
+.trillo-tree-item-tn .trillo-tn-label {
+  padding:10px 0px 0px;
+  font-weight:bold;
+}
+
+.lvl0, lvl1 etc. are added to nodes of the tree depending on the depth of the nodes in the tree.
+.lvl0 > .trillo-tree-item {
+  font-weight: bold;
+  margin-bottom:5px;
+  padding:3px;
+}
+
+.trillo-tree .lvl0:first-child {
+  /* border-top:1px solid #cccccc; */
+}
+
+.trillo-tree .lvl0 {
+ padding:15px 10px 5px 0px;
+ font-size: 17px;
+ margin-left:15px;
+ border-bottom:1px solid #cccccc;
+ line-height: 100%;
+}
+
+.trillo-tree .lvl0.no-border {
+  border-width: 0px;
+}
+
+.trillo-tree .lvl1 {
+  font-size:15px;
+  padding:8px 0px 8px 16px;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl2 {
+  font-size: 13px;
+  padding:6px 0px 0px 10px;
+}
+
+.trillo-tree .lvl3 {
+  font-size:11px;
+  padding:4px 0px 0px 5px;
+}
+
+.trillo-tree .lvl4 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+}
+
+.trillo-tree .lvl5 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+}
+.trillo-tree .lvl6 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+}
+
+.trillo-tree .lvl7 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+}
+
+.trillo-tree .odd {
+ background-color:#dddddd; 
+}
+
+.trillo-tree .even {
+ background-color:#ffffff; 
+}
+
+.trillo-tree .trillo-selected  {
+  background-color: #ff9933;
+  color: #fff;
+}
+
+.trillo-tree-action-item {
+  color:#4C88BE;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+/* Hiding and showing editable part of a cell in the table */
+.trillo-on-edit-cell {
+  display: none;
+}
+
+.trillo-editable .trillo-on-edit-cell {
+  display : table-cell; 
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Tabular view */
+
+.trillo-list-header {
+  width: 100%;
+  background-color: #f2f2f2;
+  margin: 0px;
+  position:fixed;
+  z-index: 1000;
+  border:1px solid #cccccc;
+  height:38px;
+}
+
+.trillo-list-row {
+  width: 100%;
+  border:1px solid #cccccc;
+  height:27px;
+  border-top-width: 0px;
+  position: absolute;
+}
+
+.trillo-list-row.trillo-selected {
+  border:1px solid #cccccc;
+  border-top-width: 0px;
+  background-color:#eeeeee;
+  margin: 0px;
+}
+
+.trillo-inner-list {
+  margin: 10px 0px;
+}
+
+.trillo-inner-list .trillo-list-row {
+  position: static;
+}
+  
+.trillo-inner-list .trillo-list-header {
+  position: static;
+}
+
+/* Header and rows for the tabular view. */
+.trillo-header-c {
+  display:inline-block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-left: 1px solid #aaaaaa;
+  padding:10px;
+  overflow: hidden;
+  font-weight:bold;
+  margin:0px -5px 0px 0px;
+  line-height: 16px;
+}
+
+.trillo-header-c:first-child {
+  border-left-width: 0px;
+}
+
+.trillo-content-c {
+  display:inline-block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-left: 1px solid #aaaaaa;
+  padding:5px 10px;
+  overflow: hidden;
+  margin:0px -5px 0px 0px;
+  line-height: 16px;
+}
+
+.trillo-content-c:first-child {
+  border-left-width: 0px;
+}
+
+.trillo-content-c input[type="radio"], .trillo-content-c input[type="checkbox"] {
+  margin: 0px;
+}
+
+/* .caret is from bootstrap. */
+.trillo-header-c .caret {
+  margin-left: 5px;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Info grid view. */
+
+.trillo-info-block {
+  position: absolute;
+  width: 150px;
+  border: 1px solid #d8d8d8;
+  margin:10px;
+  cursor: pointer;
+  position: absolute;
+  background-color: #f8f8f8;
+}
+
+.trillo-selected.trillo-info-block {
+  border: 4px solid #ff9933;
+  margin-top:7px;
+  margin-left:7px;
+}
+
+.trillo-info-block-tools {
+  position: absolute;
+  z-index: 100;
+  top:5px;
+  left: 10px;
+}
+
+
+.trillo-info-block .trillo-info-block-title {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 5px 10px;
+  text-align: center;
+  background-color: #ffffff;
+}
+
+.trillo-info-block .trillo-info-block-name {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 5px 0px;
+  text-align: center;
+}
+
+.trillo-info-block .trillo-info {
+  font-size: 10px;
+  border-top: 1px dashed #dddddd;
+  padding: 8px 10px;
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* From */
+
+.trillo-form-container {
+  padding-top: 1px; /* to avoid margin collapse */
+}
+
+.trillo-form-title {
+    color: #666;
+    font-family: Georgia,"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 36px;
+    margin: 20px 0px;
+}
+
+.trillo-has-form-footer .trillo-form-container-inner {
+    border-bottom-width: 0;
+    padding-bottom: 0;
+}
+
+.trillo-form-container-inner {
+    background-color: #FFFFFF;
+    border: 1px solid #DDDDDD;
+    margin: 19px auto 0;
+    padding: 0 20px;
+    width: 364px;
+}
+
+.trillo-form-container-inner-footer {
+    -moz-border-bottom-colors: none;
+    -moz-border-left-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-top-colors: none;
+    background-color: #EEEEEE;
+    border-color: #DDDDDD;
+    border-image: none;
+    border-right: 1px solid #DDDDDD;
+    border-style: solid;
+    border-width: 0 1px 1px;
+    font-size: 14px;
+    line-height: 20px;
+    margin: 0 auto 20px;
+    padding: 20px;
+    width: 364px;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Detail view - read only view of name and value pairs + any other HTML. */
+
+.trillo-dv {
+  padding: 1px 20px;
+}
+
+.trillo-dv-group-c {
+  float:left;
+  margin:10px;
+}
+
+.trillo-dv-group-c-nested .trillo-dv-group-c {
+  float: none;
+  margin:10px 0px 0px;
+  width: 100%;
+}
+
+
+.trillo-dv-group {
+  border: 1px solid #cccccc;
+}
+
+.trillo-dv-group-c-nested .trillo-dv-group {
+  border: 0px solid #cccccc;
+}
+.trillo-dv-group-title {
+    color: #666;
+    font-family: Georgia,"Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 18px;
+    padding: 11px;
+    background-color:#f2f2f2;
+}
+
+.trillo-dv-group-c-nested .trillo-dv-group-title {
+  font-size: 15px;
+}
+
+.trillo-dv-field-label {
+  padding:7px 5px 7px 15px;
+}
+
+.trillo-dv-field-value {
+  padding:7px 15px 7px 25px;
+}
+
+.trillo-dv-bordered-group {
+  border-spacing: 5px;
+  border-collapse: separate;
+}
+
+.trillo-dv-bordered-group  .trillo-dv-field-value {
+  padding:3px 5px;
+  min-width: 200px;
+  border: 1px solid #cccccc;
+}
+
+.trillo-dv-bordered-group  .trillo-dv-group {
+  border: 0px solid #cccccc;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Wizard. */
+
+.trillo-wizard-page-title {
+  margin-bottom: 20px;
+  margin-top: 20px;
+  line-height: 1.1em;
+  font-size:28px;
+  font-weight:bold;
+}
+
+.trillo-wizard-button-bar {
+  padding: 0px 15px 15px;
+  margin-bottom: 15px;
+  text-align:center;
+  border-bottom: 1px solid #aaaaaa;
+}
+
+.trillo-wizard-button-bar button {
+  margin: 0px 3px;
+}
+
+.trillo-wizard-page {
+  display:none;
+}
+
+.trillo-wizard-page.trillo-selected {
+  display:block;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Upload form. */
+
+.trillo-upload-form .trillo-file {
+  position:absolute; 
+  top:0px; 
+  left:0px; 
+  height:30px; 
+  width:390px; 
+  z-index:2; 
+  opacity:0; 
+  -moz-opacity:0; 
+  filter: alpha(opacity=1); 
+}
+
+.trillo-upload-form .trillo-file-name {
+  z-index:1; 
+  margin-bottom:0px;
+  width:290px;
+  height:30px;
+}
+
+.trillo-upload-form .trillo-choose-button {
+  z-index:1; 
+  margin-bottom:0px;
+  width:100px;
+}
+
+.trillo-upload-form  .trillo-upload-file{
+  z-index:3; 
+  margin:18px 0px 0px 0px;
+}
+
+.trillo-upload-form .trillo-upload-dragdrop-msg {
+  background: none repeat scroll 0 0 #F2F2F2;
+  color: #AAAAAA;
+  font-size: 30px;
+  font-weight: bold;
+  line-height: 40px;
+  padding: 40px 20px;
+  text-align: center;
+  width: 300px;
+}
+
+.trillo-upload-form .trillo-image-size-info {
+  
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Styles used by charts. */
+
+.trillo-chart-c {
+  width: 47.5%;
+  float:left;
+  padding: 2% 10px;
+  height: 400px;
+  min-width: 350px;
+}
+
+.trillo-chart-c .trillo-title {
+  margin-bottom: 15px;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* Bootstrap override */
+.c3-axis-x-label, .c3-axis-y-label {
+  font-size: 12px;
+  font-weight: bold;
+  font-family: arial;
+}
+
+/* Bootstrap override */
+.c3-chart-arc text {
+  font-size: 11px;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Editable list. */
+
+.trillo-editable-table {
+  padding: 10px 20px;
+}
+
+.trillo-group-title {
+  background: #787878;
+  color: #fefefe;
+  font-weight: normal;
+  font-size: 12px;
+}
+
+.trillo-editable-table th,
+.trillo-editable-table td {
+  padding:3px 5px;
+  border:1px solid #cccccc;
+  font-size: 11px;
+}
+
+.trillo-editable-table td input,
+.trillo-editable-table td select {
+  width: 100%;
+  border: 1px solid #dddddd;
+  font-size: 11px;
+  padding: 0px 5px;
+}
+
+.trillo-editable-table td.trillo-has-error input,
+.trillo-editable-table td.trillo-has-error select {
+  border-color: #a94442;
+}
+
+.trillo-editable-table-actions {
+  display: table-cell;
+}
+
+.trillo-editable-table-action {
+  margin: 0px 5px;
+  cursor: pointer;
+}
+
+.trillo-editable-table .trillo-list-header {
+  position: static;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Styles the view title bar (used for main title bar) */
+
+.trillo-content-title-bar {
+  padding:5px 20px;
+  background-color:#f2f2f2;
+  border: 1px solid #dadada;
+  border-width: 0px 1px;
+  margin-bottom:5px;
+  position: fixed;
+  z-index: 1004;
+  top:55px;
+  left: 0px;
+  right:0;
+  height:40px;
+}
+
+.trillo-content-title-bar2{
+  padding:5px 20px 5px 0px;
+  background-color:#f2f2f2;
+  border: 1px solid #dadada;
+  border-width: 0px 1px;
+  margin-bottom:5px;
+  position: fixed;
+  z-index: 1004;
+  top:55px;
+  left: 0px;
+  right:0;
+  height:40px;
+}
+
+.trillo-content-title-bar2-left {
+  float:left;
+  width: 240px;
+  padding-left: 10px;
+  border-right: 1px solid #dadada;
+}
+
+.trillo-content-title-bar2-right {
+  float:left;
+}
+
+.trillo-view-title {
+  float: left;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 20px;
+  margin: 5px 5px 0 0;
+  /* border: 1px solid #e38d13; */
+  padding: 0px 12px 0px 12px;
+}
+
+.trillo-selector-view-c {
+  display: none;
+}
+
+.trillo-content-title-bar .trillo-selector-view-c, .trillo-content-title-bar2 .trillo-selector-view-c {
+  float:left;
+  margin-left: -6px;
+  left:6px;
+}
+
+.trillo-selector-view button {
+  font-weight: bold;
+  line-height: 22px;
+  margin-top: 5px;
+  padding: 0 12px;
+  border-radius: 0px;
+  border-width:0px;
+  margin-right: -1px;
+}
+
+.trillo-selector-view .dropdown-menu {
+  margin-top: -1px;
+}
+
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Styles related to toolbars and tools */
+
+.trillo-tool-bar {
+  padding:5px 20px;
+  background-color:#f2f2f2;
+  border: 1px solid #dadada;
+  margin-bottom:5px;
+  position: fixed;
+  z-index: 1003;
+  top:95px;
+  left: 0px;
+  right:0;
+  height:34px;
+}
+
+.trillo-tool-bar > div {
+  float: left;
+  margin-right: 5px;
+}
+
+.trillo-tool-group > div {
+  float: left;
+  margin-right: 5px;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Styles used for the title of a panel */
+
+.trillo-bar-inner {
+  padding: 5px 10px;
+  background-color: #dddddd;
+  border: 1px solid #cccccc;
+  border-bottom-width: 0px;
+  height: 33px;
+}
+
+.trillo-bar-inner .trillo-title-bar {
+  text-align: left;
+  width: 50%;
+  font-size: 14px;
+  float: left;
+  line-height: 22px;
+}
+
+.trillo-bar-inner .trillo-buttons-bar {
+  text-align: right;
+  width: 50%;
+  float: right;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Title bar of popup list of logs (Task and Process). */
+
+.trillo-list-title-bar {
+  padding: 10px;
+  font-size: 17px;
+  font-weight:bold;
+  line-height: 23px;
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* CSS styles used in static pages. */
+
+.trillo-pointed {
+  position: relative;
+  display: inline-block;
+  font-family: 'Glyphicons Halflings';
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: -10px 0px 0px -25px;
+  float: left;
+  font-size: 20px;
+  color: #ff9933;
+}
+
+.trillo-pointed:before {
+  content: "\e127";
+}
+
