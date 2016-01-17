@@ -1,5 +1,5 @@
 /*!
- * TrilloJS v1.0.0 (https://github.com/trillo/trillojs#readme)
+ * TrilloJS v0.5.0 (https://github.com/trillo/trillojs#readme)
  * Copyright 2016 Collager Inc.
  * Licensed under the MIT license
  */

@@ -1,6 +1,6 @@
 {
   "name": "trillojs-spring-boot",
-  "version": "1.0.0",
+  "version": "0.5.0",
   "description": "Example application for Trillo JS tutorial",
   "repository": {
     "type": "git",
