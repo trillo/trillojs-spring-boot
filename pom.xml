@@ -71,6 +71,24 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xs
 			                <stripVersion>true</stripVersion>
 			            </configuration>
 			        </execution>
+			        <execution>
+			            <id>install-jar2</id>
+			            <phase>install</phase>
+			            <goals>
+			                <goal>copy</goal>
+			            </goals>
+			            <configuration>
+			                <artifactItems>
+			                    <artifactItem>
+			                        <groupId>io.trillo</groupId>
+			                        <artifactId>trillojs-spring-boot</artifactId>
+			                        <version>0.1.0-BUILD-SNAPSHOT</version>
+			                    </artifactItem>
+			                </artifactItems>
+			                <outputDirectory>../website-deployment/todo/server</outputDirectory>
+			                <stripVersion>true</stripVersion>
+			            </configuration>
+			        </execution>
 			    </executions>
 			</plugin>
         </plugins>

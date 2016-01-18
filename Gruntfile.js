@@ -53,6 +53,18 @@ module.exports = function(grunt) {
         src: '<%= concat.todo.dest %>',
         dest: 'dist/<%= pkg.name %>.min.js'
       }
+    },
+    copy: {
+      assets: {
+          files: [
+              {expand: true, src: ['todo-assets/**'], dest: '../website-deployment/todo/'},
+              {expand: true, src: ['trillojs/**'], dest: '../website-deployment/todo/'},
+              { src: './runServer.sh', dest: '../website-deployment/todo/'}
+          ],
+          options: {
+            mode: true
+          }
+      }
     }
   });
 
@@ -60,8 +72,10 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-jshint');
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-contrib-uglify');
+  grunt.loadNpmTasks('grunt-contrib-copy');
 
   // Default task(s).
   grunt.registerTask('default', ['clean', 'jshint', 'concat', 'uglify:todo']);
+  grunt.registerTask('deploy', ['clean', 'jshint', 'concat', 'uglify:todo', 'copy:assets']);
 
 };
