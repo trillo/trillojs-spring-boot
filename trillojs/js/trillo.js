@@ -6996,11 +6996,11 @@ Trillo.Main = Class.extend({
     Trillo.isPreview = !!$.url(location.href).param("preview");
     
     if (!(Trillo.Config.basePath)) {
-      Trillo.Config.basePath = Trillo.appContext.isTrilloServer ? ("/" + Trillo.appContext.basePath) : "/";
+      Trillo.Config.basePath = Trillo.appContext.basePath ? ("/" + Trillo.appContext.basePath) : "/";
     }
     
     if (!(Trillo.Config.viewPath)) {
-      Trillo.Config.viewPath = Trillo.appContext.isTrilloServer ? ("/view/" + Trillo.appName + "/") : "/view/";
+      Trillo.Config.viewPath = Trillo.appContext.isTrilloServer ? ("/view/" + Trillo.appName + "/") : "/" + Trillo.Config.basePath + "/view/";
     }
     
     if (!Trillo.appContext.isTrilloServer && 

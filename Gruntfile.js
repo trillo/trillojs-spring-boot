@@ -59,7 +59,8 @@ module.exports = function(grunt) {
           files: [
               {expand: true, src: ['todo-assets/**'], dest: '../website-deployment/todo/'},
               {expand: true, src: ['trillojs/**'], dest: '../website-deployment/todo/'},
-              { src: './runServer.sh', dest: '../website-deployment/todo/'}
+              { src: ['todo-assets/website-index.html'], dest: '../website-deployment/todo/todo-assets/index.html'},
+              { src: ['runServer.sh'], dest: '../website-deployment/todo/runServer.sh'}
           ],
           options: {
             mode: true

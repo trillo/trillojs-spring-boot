@@ -1,7 +1,7 @@
 {
   "name": "trillojs-spring-boot",
   "version": "0.5.0",
-  "description": "Example application for Trillo JS tutorial",
+  "description": "Example application for TrilloJS tutorial",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/trillo/trillojs-spring-boot.git"
