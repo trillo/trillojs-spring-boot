@@ -7000,7 +7000,8 @@ Trillo.Main = Class.extend({
     }
     
     if (!(Trillo.Config.viewPath)) {
-      Trillo.Config.viewPath = Trillo.appContext.isTrilloServer ? ("/view/" + Trillo.appName + "/") : "/" + Trillo.Config.basePath + "/view/";
+      Trillo.Config.viewPath = Trillo.appContext.isTrilloServer ? ("/view/" + Trillo.appName + "/") : 
+        (Trillo.Config.basePath === "/" ? "/view/" : Trillo.Config.basePath + "/view/");
     }
     
     if (!Trillo.appContext.isTrilloServer && 
