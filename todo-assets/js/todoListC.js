@@ -4,7 +4,7 @@ ToDo.ToDoListC = Trillo.Controller.extend({
     this._super(viewSpec);
   },
  
-  handleAction: function(actionName, obj, infoItem) {
+  handleAction: function(actionName, obj) {
     if (actionName === "newTask") {
       // Creates new form specification as JSON.
       // Builds new view using showView method.
@@ -26,7 +26,7 @@ ToDo.ToDoListC = Trillo.Controller.extend({
       return true;
     }
     
-    return this._super(actionName, obj, infoItem);
+    return this._super(actionName, obj);
   },
   
   afterPost: function(result, view) {

@@ -3,6 +3,210 @@
  * Copyright 2016 Collager Inc.
  * Licensed under the MIT license
  */
+Trillo.Controller = Trillo.BaseController.extend({
+  
+  initialize: function(viewSpec) {
+    this._super(viewSpec);
+  },
+  
+  setToolVisible: function(name, visible) {
+    this._view.toolsMgr.setToolVisible(name, visible);
+  },
+  
+  setToolVisibleBySelector: function(selector, visible) {
+    this._view.toolsMgr.setToolVisibleBySelector(selector, visible);
+  },
+  
+  postToolsActivate: function() {
+    // this can be overridden by custom controllers to do any custom logic related to tools.
+  },
+  
+  /** Requires this._super call */
+  updateTbState: function(selectedObj) {
+    // this can be overridden by custom controllers to update tools state.
+    if (this.actionH && this.actionH.updateTbState) {
+      this.actionH.updateTbState(selectedObj);
+    }
+  },
+
+  updatModelWithParms: function(modelSpec, params) {
+    modelSpec._newData = null; // reset _newData
+    modelSpec.parentData = null;
+    modelSpec.params = {};
+    modelSpec.viewName = this.name;
+    var p = this.parentController();
+    var pview = p ? p.view() : null;
+    if (pview && pview.selectedObj && Trillo.uidToId(pview.selectedObj.uid) === "-1") {
+      var parentViewType = pview.viewSpec.type;
+      if (parentViewType === Trillo.ViewType.Tree || Trillo.isCollectionView(parentViewType)) {
+        // an object with -1 id is selected in the tree or collection view. Use it as as the data for this model
+        modelSpec._newData = pview.selectedObj;
+        return;
+      }
+    }
+    modelSpec.parentData = pview ? (pview.selectedObj ? pview.selectedObj : pview.data) : null;
+    if (modelSpec.impl === "Trillo.ServiceModel") {
+      p = this.parentController();
+      var obj = p ? p.getClosestSelectedObj() : null;
+      modelSpec.params = $.extend({}, obj, this.viewSpec.params);
+    } else {
+      var contextUid = this.getContextUid();
+      if (modelSpec.impl === "Trillo.CollectionModel") {
+        if (!modelSpec.filter) {
+          modelSpec.params.assocUid= contextUid;
+        }
+      } else {
+        if (this.viewSpec.type !== Trillo.ViewType.Tree) {
+          modelSpec.params.uid = contextUid;
+        } else {
+          modelSpec.params.assocUid = contextUid;
+        }
+      }
+    }
+  },
+
+  /*
+   * By default it lets the view compute its own title.
+   * Custom controller can override this and set own title by calling
+   * this._view.setTitle(title, titlePrefix);
+   */
+  updateTitle: function() {
+    this._view.updateTitle();
+  },
+  
+  handleAction: function(actionName, obj, view) {
+    if (this.actionH) {
+      if (this.actionH.handleAction(actionName, obj, view)) {
+        return true;
+      }
+    }
+    if (actionName === "close") {
+      this.close();
+      return true;
+    } else if (actionName === "ok") {
+      this.ok();
+      return true;
+    } else if (actionName === "detail") {
+      return this.doDefaultDetailView(obj);
+    } else if (actionName === 'upload') {
+      this.doUpload();
+      return true;
+    }
+    return false;
+  },
+  
+  close: function() {
+    this._view.clear();
+  },
+  
+  ok: function() {
+    if (this.viewSpec.type === Trillo.ViewType.Form) {
+      this.submitForm();
+    }
+  },
+  
+  doDefaultDetailView: function(obj) {
+    var p = this.parentController();
+    if (p && Trillo.isCollectionView(this.viewSpec.type) && 
+        p.viewSpec.type === Trillo.ViewType.Tree ) {
+      var item = p.view().tree.getItemByUid(obj.uid);
+      if (item) {
+        return p.selectAndRoute(obj.uid);
+      }
+    }
+    return false;
+  },
+  
+  doUpload: function() {
+    this.showView(this.getFileUploadSpec());
+  },
+  
+  getFileUploadSpec: function() {
+    return {
+      name: "FileUpload",
+      type: Trillo.ViewType.Default,
+      isDialog: true,
+      container: "trillo-dialog-container",
+      controller: "Trillo.FileUploadC",
+      modelSpec : {
+        data: {
+          fileName: "a"
+        }
+      },
+      params : {
+        targetViewName: this.viewSpec.name,
+        folder: "",
+        uploadUrl: "/fileUpload"
+      }
+    };
+  },
+  
+  fileUploadSuccessful: function(option) {
+    if (this.viewSpec.isDialog) {
+      this.close();
+    }
+  },
+  
+  fileUploadFailed: function(option) {
+    this.$elem().find(".js-upload-alert").html(option.error).show();
+  },
+  
+  
+  submitForm: function() {
+    if (this._view.canSubmit()) {
+      var data = this.modelData();
+      if (!this.beforePost(data, this._view)) {
+        return;
+      }
+      var cb = $.proxy(this.submitFormCompleted, this);
+      var postData;
+      var url;
+      var viewSpec = this.viewSpec;
+      postData = data;
+      url = viewSpec.postUrl;   
+      $.ajax({
+        url: url,
+        type: 'post',
+        data: Trillo.stringify(postData),
+        contentType : "application/json"
+      }).done(cb);
+    }
+  },
+  
+  getFormSubmitUrl: function() {
+    return "/submitForm";
+  },
+  
+  submitFormCompleted: function(result) {
+    if (result.status === "failed") {
+      this.showNamedMessagesAsError(result.namedMessages);
+    } else {
+      this.clear();
+      if (this.viewSpec.isDialog) {
+        this.close();
+      }
+    }
+    this.afterPost(result, this.view());
+  },
+  
+  beforePost: function(data, view) {
+    var p = this.parentController();
+    if (p) {
+      return p.beforePost(data, view);
+    }
+    return true;
+  },
+ 
+  afterPost: function(result, view) {
+    var p = this.parentController();
+    if (p) {
+      p.afterPost(result, view);
+    } else {
+      this.showResult(result);
+    }
+  }
+  
+});
 Trillo.Tools = Class.extend({
   initialize : function(options) {
     this.$toolsE = options.$toolsE;
@@ -2998,7 +3202,7 @@ Trillo.CollectionView = Trillo.View.extend({
   },
   
   infoItemDblClicked: function(infoItem) {
-    return this.controller().dblClicked(infoItem ? infoItem.$rootE : null, infoItem ? infoItem.obj : null, infoItem);
+    return this.controller().dblClicked(infoItem ? infoItem.$rootE : null, infoItem ? infoItem.obj : null);
   },
   
   objChanged: function(obj) {
@@ -3940,7 +4144,7 @@ Trillo.BaseActionH = Class.extend({
     }
   },
   
-  handleAction: function(actionName, obj, infoItem, view) {
+  handleAction: function(actionName, obj, view) {
     return false;
   }
 });
