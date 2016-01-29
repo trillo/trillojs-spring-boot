@@ -4,7 +4,7 @@ ToDo.ToDoListC = Trillo.Controller.extend({
     this._super(viewSpec);
   },
  
-  handleAction: function(actionName, obj) {
+  handleAction: function(actionName, selectedObj) {
     if (actionName === "newTask") {
       // Creates new form specification as JSON.
       // Builds new view using showView method.
@@ -26,7 +26,7 @@ ToDo.ToDoListC = Trillo.Controller.extend({
       return true;
     }
     
-    return this._super(actionName, obj);
+    return this._super(actionName, selectedObj);
   },
   
   afterPost: function(result, view) {
@@ -37,11 +37,11 @@ ToDo.ToDoListC = Trillo.Controller.extend({
     }
   },
 
-  fieldChanged: function(name, value, valid, view, obj) {
+  fieldChanged: function(name, value, valid, view, selectedObj) {
     var self = this;
     if (name === "completed") {
       $.ajax({
-        url: "updateCompleted?uid=" + obj.uid + "&completed=" + value,
+        url: "updateCompleted?uid=" + selectedObj.uid + "&completed=" + value,
         type: 'get',
         datatype : "application/json"
       }).done(function(result) {
