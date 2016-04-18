@@ -202,7 +202,7 @@
 .trillo-list-row {
   width: 100%;
   border:1px solid #cccccc;
-  height:27px;
+  min-height:27px;
   border-top-width: 0px;
   position: absolute;
 }
@@ -248,10 +248,16 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   border-left: 1px solid #aaaaaa;
-  padding:5px 10px;
+  padding:0px 10px;
   overflow: hidden;
   margin:0px -5px 0px 0px;
   line-height: 16px;
+}
+
+.trillo-content-c input:not([type='checkbox']), .trillo-content-c select {
+    width: 100%;
+    border: 1px solid #dddddd;
+    padding: 0px 5px;
 }
 
 .trillo-content-c:first-child {
@@ -369,6 +375,11 @@
 
 .trillo-dv {
   padding: 1px 20px;
+}
+
+.trillo-dv-narrow {
+  padding: 1px 20px;
+  width: 350px;
 }
 
 .trillo-dv-group-c {

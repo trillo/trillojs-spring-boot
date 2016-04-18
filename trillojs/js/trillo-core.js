@@ -3,6 +3,11 @@
  * Copyright 2016 Collager Inc.
  * Licensed under the MIT license
  */
+jQuery.fn.extend({
+  dataOrAttr: function (key) {
+    return this.data(key) || this.attr(key);
+  }
+});
 Trillo = {
 
     appLocation : "",
@@ -165,7 +170,9 @@ Trillo.Config = {
   /** The base path that is used as prefix in router. 
    * Trillo Server uses the application name as the base path.
    */
-  basePath : null
+  basePath : null,
+  
+  pagePath: null
 };
 
 Trillo.HtmlTemplates = {
@@ -398,11 +405,12 @@ Trillo.formatValue = function($e, value, isField) {
   if (!value || value === "") {
     return isField ? "" : "&nbsp;";
   }
-  var dt = $e.attr("display-type");
+  var dt = $e.dataOrAttr("display-type");
+  var enumName = $e.dataOrAttr("enum-name");
   if (dt) {
-    if (dt === "date") {
+    if (dt === "date" || dt === "time" || dt === "datetime") {
       return this.formatDate($e, value);
-    } else if (dt === "enum" || dt === "css-class") {
+    } else if (enumName) {
       return this.getEnumName($e, value);
     }
   }
@@ -410,12 +418,12 @@ Trillo.formatValue = function($e, value, isField) {
 };
 
 Trillo.formatDate = function($e, value) {
-  var format = $e.attr("format") || "M/D/YY hh:mm:ss A";
+  var format = $e.dataOrAttr("format") || "M/D/YY hh:mm:ss A";
   return moment(value).format(format);
 };
 
 Trillo.getEnumName = function($e, value) {
-  var enumName = $e.attr("enum-name");
+  var enumName = $e.dataOrAttr("enum-name");
   return Trillo.enumCatalog.getName(enumName, value);
 };
 
@@ -561,6 +569,20 @@ Trillo.getNearestInDOMTree = function($e, selector) {
   return $temp;
 };
 
+Trillo.getTriggerFromPath = function(path) {
+  var idx = path.indexOf(":");
+  if (idx >= 0) {
+    return path.substring(0, idx);
+  }
+  return path;
+};
+
+Trillo.clearObj = function(obj) {
+  var prop;
+  for (prop in obj) {
+    delete obj[prop];
+  }
+};
 
 
 Trillo.EnumCatalog = Class.extend({
@@ -607,53 +629,65 @@ Trillo.EnumCatalog = Class.extend({
 Trillo.enumCatalog = new Trillo.EnumCatalog();
 /**** */
 $(function() {
-  $.ajaxSetup({ cache: false });
-    
-    // Ajax events fire in following order
-    $(document).ajaxStart(function () {
-      Trillo.alert.clear();
-      // display busy indicator
-      Trillo.showBusy();
-    }).ajaxSend(function (e, xhr, opts) {
-      /* if (opts.url.indexOf("/view") !== 0) {
-        opts.url = Trillo.appLocation + opts.url;
-      } */
-    }).ajaxError(function (e, xhr, opts) {
-      
-       // display error message
-      try {
-        var data = $.parseJSON(xhr.responseText);
-        if (data.redirectUrl) {
-          if (data.redirectUrl === "/login") {
-            window.location.reload(true);
-          } else {
-            window.location.href = data.redirectUrl;
+  $.ajaxSetup(
+      { cache: false,
+        beforeSend: function(xhr) {
+          if (Trillo.orgName) {
+            xhr.setRequestHeader('x-org-name', Trillo.orgName);
           }
-          return;
+          if (Trillo.appName) {
+            xhr.setRequestHeader('x-app-name', Trillo.appName);
+          }
         }
-        if (opts.error) {
-          return;
-        }
-        var msg = data.message || data.detail;
-        if (msg) {
-          Trillo.log.error(msg);
-        }
-      } catch (exc) {
-        if (opts.error) {
-          return;
-        }
-        // log exception message
-        Trillo.log.error(exc.message);
-        // refresh page ...
-        //window.location.reload(true);
       }
-    }).ajaxSuccess(function (e, xhr, opts) {
-      
-    }).ajaxComplete(function (e, xhr, opts) {
-    }).ajaxStop(function () {
-      // hide busy indicator
-      Trillo.hideBusy();
-    });
+  
+  );
+    
+  // Ajax events fire in following order
+  $(document).ajaxStart(function () {
+    Trillo.alert.clear();
+    // display busy indicator
+    Trillo.showBusy();
+  }).ajaxSend(function (e, xhr, opts) {
+    /* if (opts.url.indexOf("/view") !== 0) {
+      opts.url = Trillo.appLocation + opts.url;
+    } */
+  }).ajaxError(function (e, xhr, opts) {
+    
+     // display error message
+    try {
+      var data = $.parseJSON(xhr.responseText);
+      if (data.redirectUrl) {
+        if (data.redirectUrl === "/login") {
+          window.location.reload(true);
+        } else {
+          window.location.href = data.redirectUrl;
+        }
+        return;
+      }
+      if (opts.error) {
+        return;
+      }
+      var msg = data.message || data.detail;
+      if (msg) {
+        Trillo.log.error(msg);
+      }
+    } catch (exc) {
+      if (opts.error) {
+        return;
+      }
+      // log exception message
+      Trillo.log.error(exc.message);
+      // refresh page ...
+      //window.location.reload(true);
+    }
+  }).ajaxSuccess(function (e, xhr, opts) {
+    
+  }).ajaxComplete(function (e, xhr, opts) {
+  }).ajaxStop(function () {
+    // hide busy indicator
+    Trillo.hideBusy();
+  });
 });
 Trillo.Log = Class.extend({
   initialize : function() {
@@ -681,7 +715,12 @@ Trillo.Alert = Class.extend({
     this.$t = this.$e.find('.js-title');
     this.$m = this.$e.find('.js-message');
     this.fo = $.proxy(this.fadeOut, this);
-    this.$e.find('[nm="close"]').on("click", $.proxy(this.doAction, this));
+    this.actionM = $.proxy(this.doAction, this);
+    this.initActionHandler();
+  },
+  
+  initActionHandler: function() {
+    this.$e.find('[nm="close"]').off("click", this.actionM).on("click", this.actionM);
   },
   
   show: function(title, msg, auto, $pe) {
@@ -714,7 +753,7 @@ Trillo.Alert = Class.extend({
   doAction: function(ev) {
     if (ev) {
       ev.stopPropagation();
-      var action = $(ev.target).attr("nm");
+      var action = $(ev.target).dataOrAttr("nm");
       if (action === "close") {
         this.clear();
       }
@@ -748,7 +787,7 @@ Trillo.Modal = Class.extend({
   },
   doAction: function(ev) {
     var $e = $(ev.target);
-    var name = $e.attr("nm");
+    var name = $e.dataOrAttr("nm");
     var options = this.options;
     switch(name) {
     case 'modalOK' : 
@@ -899,15 +938,27 @@ Trillo.Router = Class.extend({
   },
   
   normalizeRoute: function(route) {
+    var idx;
     if (!route) {
       return route;
     }
-    var prefix = Trillo.Config.basePath;
+    var prefix = Trillo.Config.pagePath;
     if (route.indexOf(prefix) === 0) {
       route = route.substring(prefix.length); 
+      if (route.indexOf(";") === 0) {
+        // should not happen
+        idx = route.indexOf("/");
+        if (idx > 0) {
+          route = route.substring(0, idx);
+        }
+      }
     }
     if (route.indexOf("/") === 0) {
       route = route.substring(1); 
+    }
+    idx = route.indexOf("?");
+    if (idx > -1) {
+      route = route.substring(0, idx);
     }
     return route;
   }
@@ -983,10 +1034,9 @@ Trillo.ModelFactory = Class.extend({
 
 Trillo.Model = Class.extend({
   
-  initialize : function(modelSpec, view) {
+  initialize : function(modelSpec, controller) {
     this.modelSpec = modelSpec;
-    this._view = view;
-    this._controller = view.controller();
+    this._controller = controller;
     this.observer = null;
     this.table = {};
     this.data = modelSpec._newData || modelSpec.data;
@@ -994,17 +1044,32 @@ Trillo.Model = Class.extend({
     this.parentData = modelSpec.parentData;
     this.dataPath = modelSpec.dataPath || "";
     this.listners = [];
-    if (modelSpec.observeChanges) {
-      this.addListener(view); // view is primary listener
-    }
+    this.addListener(controller); // controller is primary listener
+    this.savedStateChanges = [];
+    this.revertedStateChanges = [];
+    this.managingState = false;
+    this.txOn = false;
+    this.txId = -1;
+    this.txIdCounter = 0;
   },
   
   view: function() {
-    return this._view;
+    return this._controller.view();
   },
   
   controller: function() {
     return this._controller;
+  },
+  
+  stateManagerModel: function() {
+    if (this.managingState) {
+      return this;
+    }
+    var pc = this._controller.parentController();
+    if (pc) {
+      return pc.model().stateManagerModel();
+    }
+    return null;
   },
   
   clear: function() {
@@ -1012,13 +1077,71 @@ Trillo.Model = Class.extend({
     this.table = {};
   },
   
-  isModelChanged: function(modelSpec) {
+  isModelSpecChanged: function(modelSpec) {
     return !Trillo.matches(modelSpec, this.modelSpec) ||
     (modelSpec.data && modelSpec.data !== this.data) || (modelSpec._newData);
   },
+  
+  setData: function(data) {
+    if (data === this.data) {
+      return;
+    }
+    if (!data) {
+      data = {}; // use empty data
+    }
+    this.data = data;
+    this.modelSpec.data = data;
+    this.triggerModelDataChanged();
+    if (this.managingState) {
+      this.savedStateChanges = [];
+      this.revertedStateChanges = [];
+      this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+    }
+  },
+  
+  cloneData: function() {
+    var dt = this.data;
+    if (dt instanceof Array) {
+      var newData = [];
+      $.each(dt, function(idx, obj) {
+        newData.push($.extend({}, obj));
+      });
+      return newData;
+    } else {
+      return $.extend({}, dt);
+    }
+  },
+  
+  getData: function() {
+    return this.data;
+  },
 
   setValue: function(name, value) {
+    var f = null;
+    var oldValue = this.getValue(name);
+    var smm = this.stateManagerModel();
+    if (smm) {
+      f = smm.beginTx();
+      this.saveStateChange({changeType: "objectAttrChanged", obj: this.data, name: name, value: value, oldValue: oldValue, 
+        affected : this.getAffectedData(this.data)});
+    }
     Trillo.setObjectValue(this.data, name, value);
+    this._controller.attrChanged(this.data, name, value, oldValue, this);
+    this.triggerChanged(this.data);
+    if (f) {
+      f();
+    }
+  },
+  
+  // updates value quietly (this is used for updating attributes which are missing but should have been present by default)
+  setValueQuiet: function(name, value) {
+    Trillo.setObjectValue(this.data, name, value);
+  },
+  
+  setValueNoRecording: function(name, value) {
+    var oldValue = this.getValue(name);
+    Trillo.setObjectValue(this.data, name, value);
+    this._controller.attrChanged(this.data, name, value, oldValue, this);
     this.triggerChanged(this.data);
   },
   
@@ -1026,11 +1149,77 @@ Trillo.Model = Class.extend({
     return Trillo.getObjectValue(this.data, name);
   },
   
+  setObjAttrByUid: function(uid, name, value) {
+    var obj = this.getObj(uid);
+    if (obj) {
+      this.setObjAttr(obj, name, value);
+    }
+  },
+  
+  setObjAttr: function(obj, name, value) {
+    var f = null;
+    if (obj) {
+      var smm = this.stateManagerModel();
+      var oldValue = Trillo.getObjectValue(obj, name);
+      if (smm) {
+        f = smm.beginTx();
+        this.saveStateChange({changeType: "objectAttrChanged", obj: obj, name: name, value: value, oldValue: this.getValue(name),
+          affected : this.getAffectedData(this.data)});
+      }
+      Trillo.setObjectValue(obj, name, value);
+      this._controller.attrChanged(obj, name, value, oldValue, this);
+      this.triggerChanged(obj);
+    }
+    if (f) {
+      f();
+    }
+  },
+  
+  setObjAttrByUidQuiet: function(uid, name, value) {
+    var obj = this.getObj(uid);
+    if (obj) {
+      this.setObjAttrQuiet(obj, name, value);
+    }
+  },
+  
+  setObjAttrQuiet: function(obj, name, value) {
+    if (obj) {
+      Trillo.setObjectValue(obj, name, value);
+    }
+  },
+  
+  setObjAttrByUidNoRecording: function(uid, name, value) {
+    var obj = this.getObj(uid);
+    if (obj) {
+      this.setObjAttrNoRecording(obj, name, value);
+    }
+  },
+  
+  setObjAttrNoRecording: function(obj, name, value) {
+    if (obj) {
+      var oldValue = Trillo.getObjectValue(obj, name);
+      Trillo.setObjectValue(obj, name, value);
+      this._controller.attrChanged(obj, name, value, oldValue, this);
+      this.triggerChanged(obj);
+    }
+  },
+  
+  getObjAttrByUid: function(uid, name) {
+    var obj = this.getObj(uid);
+    if (obj) {
+      return Trillo.getObjectValue(obj, name);
+    }
+    return null;
+  },
+  
   getObj: function(uid) {
+    if (this.table[uid]) {
+      return this.table[uid];
+    }
     if (this.data) {
       if (this.data instanceof Array) {
         var l = this.data;
-        for (var i=0; i<l.lenngth; i++) {
+        for (var i=0; i<l.length; i++) {
           if (l[i].uid === uid) {
             return l[i];
           }
@@ -1040,6 +1229,11 @@ Trillo.Model = Class.extend({
       }
     }
     return null;
+  },
+  
+  _setObjAttr: function(obj, name, value) {
+    Trillo.setObjectValue(obj, name, value);
+    this.triggerChanged(obj);
   },
   
   loadData: function() {
@@ -1066,9 +1260,14 @@ Trillo.Model = Class.extend({
       deferred.resolve(self);
     } else {
       $.ajax({
-        url: "/model/loadTestData?viewName=" + viewName + "&appName=" + Trillo.appName,
+        url: "/loadTestData?viewName=" + viewName + "&appName=" + Trillo.appName,
         type: 'get'
-      }).done($.proxy(this.dataLoaded, this, deferred));
+      }).done($.proxy(this.dataLoaded, this, deferred)).
+      fail(function() {
+        deferred.reject({
+          errorMsg: "Failed to load test data"
+        });
+      });
     }
     return deferred.promise();
   },
@@ -1081,16 +1280,20 @@ Trillo.Model = Class.extend({
       deferred.resolve(self);
     } else {
       $.ajax({
-        url: "/model/loadChartTestData?chartName=" + chartName + "&appName=" + Trillo.appName,
+        url: "/loadChartTestData?chartName=" + chartName + "&appName=" + Trillo.appName,
         type: 'get'
-      }).done($.proxy(this.dataLoaded, this, deferred));
+      }).done($.proxy(this.dataLoaded, this, deferred)).
+      fail(function() {
+        deferred.reject({
+          errorMsg: "Failed to load chart test data"
+        });
+      });
     }
     return deferred.promise();
   },
   
   dataLoaded: function(deferred, data) {
     this.data = data;
-    this.controller().modelLoaded(this);
     deferred.resolve(this);
   },
 
@@ -1130,11 +1333,11 @@ Trillo.Model = Class.extend({
     }
   },
   
-  triggerChanged: function(modifiedItem) {
+  triggerChanged: function(obj) {
     var l = this.listners, n = l.length;
     for (var i=0; i<n; i++) {
       if (l[i].objChanged) {
-        l[i].objChanged(modifiedItem);
+        l[i].objChanged(obj);
       }
     }
   },
@@ -1148,10 +1351,41 @@ Trillo.Model = Class.extend({
     }
   },
   
-  processObjAdded: function(newObj) {
+  triggerModelDataChanged: function() {
+    var l = this.listners, n = l.length;
+    for (var i=0; i<n; i++) {
+      if (l[i].modelDataChanged) {
+        l[i].modelDataChanged(this);
+      }
+    }
   },
   
-  processObjDeleted: function(deletedItem) {
+  processObjAdded: function(newObj) {
+    this.table[newObj.uid] = newObj;
+    this.triggerAdded(newObj);
+    return newObj;
+  },
+  
+  processObjChanged: function(item) {
+    var itemOld, table = this.table;
+    itemOld = table[item.uid];
+    if (itemOld) {
+      if (itemOld !== item) {
+        $.extend(itemOld, item);
+      }
+      this.triggerChanged(itemOld);
+    }
+    return itemOld;
+  },
+  
+  processObjDeleted: function(item) {
+    var itemOld, table = this.table;
+    itemOld = table[item.uid];
+    if (itemOld) {
+      table[item.uid] = null;
+      this.triggerDeleted(itemOld);
+    }
+    return itemOld;
   },
  
   createObserver: function() {
@@ -1181,16 +1415,11 @@ Trillo.Model = Class.extend({
     var itemOld, table = this.table;
     itemOld = table[item.uid];
     if (item._deleted_) {
-      if (itemOld) {
-        this.processObjDeleted(itemOld);
-        this.triggerDeleted(itemOld);
-      }
+      this.processObjDeleted(item);
     } else if (itemOld) {
-      $.extend(itemOld, item);
-      this.triggerChanged(itemOld);
+      this.processObjChanged(item);
     } else {
       this.processObjAdded(item);
-      this.triggerAdded(item);
     }
   },
 
@@ -1205,18 +1434,175 @@ Trillo.Model = Class.extend({
         return 0;
       }
     }
-    if (this.data instanceof Array) {
+    var dt = this.data.items || this.data;
+    if (dt instanceof Array) {
      
       if (currentSort === "asc") {
-        this.data.sort(function(a, b) {
+        dt.sort(function(a, b) {
           return doCompare(a, b);
         });
       } else {
-        this.data.reverse(function(a, b) {
+        dt.reverse(function(a, b) {
           return doCompare(a, b);
         });
       }
     }
+  },
+  
+  saveStateChange: function(stateChange) {
+    var smm = this.stateManagerModel();
+    if (smm) {
+      var f = smm.beginTx();
+      smm._saveStateChange(stateChange, this);
+      f();
+    }
+  },
+  
+  saveModelData: function(oldData, params) {
+    var smm = this.stateManagerModel();
+    if (smm) {
+      var f = smm.beginTx();
+      smm._saveStateChange({changeType: "modelData", oldData: oldData, newData: this.cloneData(), data: this.data, params: params,
+        affected : this.getAffectedData(this.data)}, this);
+      f();
+    }
+  },
+  
+  _saveStateChange: function(stateChange, sourceModel) {
+    this.revertedStateChanges = [];
+    this.savedStateChanges.push({stateChange: stateChange, sourceModel: sourceModel, __txId: this.txId});
+    this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+  },
+  
+  undo: function() {
+    if (this.savedStateChanges.length) {
+      var idx = this.savedStateChanges.length - 1;
+      var currentTxId = this.savedStateChanges[idx].__txId;
+      var firstInTx = true;
+      while (idx >= 0 && this.savedStateChanges[idx].__txId === currentTxId) {
+        var changeDef = this.savedStateChanges.pop();
+        this.controller().undoing(changeDef.stateChange, firstInTx);
+        changeDef.sourceModel.undoStateChange(changeDef.stateChange);
+        this.revertedStateChanges.push(changeDef);
+        this.controller().undone(changeDef.stateChange, firstInTx);
+        idx--;
+        firstInTx = false;
+      }
+      this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+    }
+  },
+  
+  redo: function() {
+    if (this.revertedStateChanges.length) {
+      var idx = this.revertedStateChanges.length - 1;
+      var currentTxId = this.revertedStateChanges[idx].__txId;
+      var firstInTx = true;
+      while (idx >= 0 && this.revertedStateChanges[idx].__txId === currentTxId) {
+        var changeDef = this.revertedStateChanges.pop();
+        this.controller().redoing(changeDef.stateChange, firstInTx);
+        changeDef.sourceModel.redoStateChange(changeDef.stateChange);
+        this.savedStateChanges.push(changeDef);
+        this.controller().redone(changeDef.stateChange, firstInTx);
+        idx--;
+        firstInTx = false;
+      }
+      this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+    }
+  },
+  
+  undoStateChange: function(stateChange) {
+    var changeType = stateChange.changeType;
+    if (changeType === "objectAttrChanged") {
+      if (this.data !== stateChange.obj) this.data = stateChange.obj;
+      this._setObjAttr(stateChange.obj, stateChange.name, stateChange.oldValue);
+    } else if (changeType === "modelData") {
+      if (this.data !== stateChange.data) this.data = stateChange.data;
+      this._copyData(stateChange.oldData);
+    }
+  },
+  
+  redoStateChange: function(stateChange) {
+    var changeType = stateChange.changeType;
+    if (changeType === "objectAttrChanged") {
+      if (this.data !== stateChange.obj) this.data = stateChange.obj;
+      this._setObjAttr(stateChange.obj, stateChange.name, stateChange.value);
+    } else if (changeType === "modelData") {
+      if (this.data !== stateChange.data) this.data = stateChange.data;
+      this._copyData(stateChange.newData);
+    }
+  },
+  
+  beginTx: function() {
+    if (this.txOn) {
+      return function() {};
+    }
+    this.txIdCounter += 1;
+    this.txId = this.txIdCounter;
+    this.txOn = true;
+    var self = this;
+    return function() {
+      setTimeout(function() {
+        self.txId = -1;
+        self.txOn = false;
+      }, 0);
+    };
+  },
+  
+  isSaveNeeded: function() {
+    return this.savedStateChanges.length > 0;
+  },
+  
+  _copyData: function(sourceData) {
+    var targetData = this.data;
+    if (targetData instanceof Array) {
+      var dl = targetData.slice();
+      var d;
+      targetData.length = 0;
+      var i;
+      for (i=0; i<sourceData.length; i++) {
+        if (dl.length > i) {
+          d = dl[i];
+          Trillo.clearObj(d);
+        } else {
+          d = {};
+        }
+        targetData.push($.extend(dl.length > i ? dl[i] : {}, sourceData[i]));
+      }
+    } else {
+      Trillo.clearObj(targetData);
+      $.extend(targetData, sourceData);
+    }
+    this.triggerModelDataChanged();
+  },
+  
+  getAffectedData: function(source) {
+    var affected = [];
+    
+    for (var i=0; i<arguments.length; i++) {
+      affected.push(arguments[i]);
+    }
+    
+    if (this.modelSpec.trackedData) {
+      affected.push(this.modelSpec.trackedData);
+    }
+    
+    return affected;
+  },
+  
+  isAffected: function(dt) {
+    var l = this.savedStateChanges, n = l.length, i, j, affected, st;
+    for (i=0; i<n; i++) {
+      st = l[i].stateChange;
+      affected = st.affected;
+      if (affected) {
+        for (j=0; j<affected.length; j++) {
+          if (affected[j] == dt) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 });
 
@@ -1399,7 +1785,8 @@ Trillo.ViewType = {
   Dropdown: "dropdown",
   Nav: "nav",
   Default: "default",
-  Toc: "toc"
+  Toc: "toc",
+  NavTree: "navTree"
 };
 
 Trillo.ImplClassByViewType = {
@@ -1417,7 +1804,8 @@ Trillo.ImplClassByViewType = {
   "dropdown": "Trillo.DropdownView",
   "editableTable": "Trillo.EditableTableView",
   "toc": "Trillo.TocView",
-  "content": "Trillo.ContentView"
+  "content": "Trillo.ContentView",
+  "navTree": "Trillo.NavTreeView"
 };
 
 
@@ -1444,6 +1832,17 @@ Trillo.isDetailView = function(type) {
 
 Trillo.isFormView = function(type) {
   return (type === Trillo.ViewType.Form);
+};
+
+Trillo.getViewTypeByImplClass = function(impl) {
+  var type = null;
+  $.each(Trillo.ImplClassByViewType, function(key, value) {
+    if (value == impl) {
+      type = key;
+      return false;
+    }
+  });
+  return type;
 };
 
 Trillo.findAndSelf = function($e, cssSelector) {
@@ -1473,6 +1872,14 @@ Trillo.convertToPage = function(data) {
   return page;
 };
 
+Trillo.convertToArray = function(data) {
+  data = data || [];
+  if (typeof data.length !== "undefined") {
+    return data;
+  }
+  return [data];
+};
+
 // return list of objects from page (if it is a page)
 Trillo.listFromPage = function(data) {
   data = data || [];
@@ -1486,22 +1893,32 @@ Trillo.listFromPage = function(data) {
   return data;
 };
 
-Trillo.setFieldsValue = function($e, obj) {
-  $e.find(".js-field-value").each(function(idx) {
-    var name, $t, v;
-    $t = $(this);
-    name = $t.attr("nm");
-    if (name) {
-      v = Trillo.getObjectValue(obj, name);
-      Trillo.setFieldValue($t, v, false);
+Trillo.chartDataFromModelData = function(chartName, data) {
+  if (!data) {
+    return [];
+  }
+  if (data.items  && typeof data.items.length !== "undefined") {
+    return data.items;
+  }
+  if (typeof data.length !== "undefined") {
+    return data;
+  }
+  var dt = data[chartName];
+  if (dt) {
+    if (dt.items  && typeof dt.items.length !== "undefined") {
+      return dt.items;
     }
-  });
+    if (typeof dt.length !== "undefined") {
+      return dt;
+    }
+  }
+  return [];
 };
 
 Trillo.setFieldValue = function($e, value, readonly) {
   var name, type, dt, tagName;
   tagName = $e.prop("tagName").toLowerCase();
-  name = $e.attr("nm");
+  name = $e.dataOrAttr("nm");
   type = $e.attr("type");
   
   if (type === "radio" || type === "checkbox") {
@@ -1510,8 +1927,11 @@ Trillo.setFieldValue = function($e, value, readonly) {
       $e.attr("disabled", "true");
     }
   } else if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+    if (tagName === "select") {
+      Trillo.setSelectOptionsFromEnum($e, value);
+    }
     $e.val(value);
-    $e.parent().find(".js-readonly-value").remove();
+    $e.parent().find(".js-temp-elem-for-read-only").remove();
     if (!readonly) {
       $e.show();
       /*
@@ -1527,17 +1947,17 @@ Trillo.setFieldValue = function($e, value, readonly) {
       if (tagName === "select") {
         value = $e.find("option:selected").text(); // will get display value
       }
-      $e.after('<span class="js-readonly-value">' + value + '</span>');
+      $e.after('<span class="js-temp-elem-for-read-only">' + value + '</span>');
     }
   } else if (tagName === 'img') {
     $e.attr("src", value);
   } else {
     value = Trillo.formatValue($e, value); // will get display value
-    dt = $e.attr("display-type");
+    dt = $e.dataOrAttr("display-type");
     if (dt === "css-class") {
       $e.addClass(value);
     } else {
-      $e.html(typeof value === "undefined" ? "" : "" + value);
+      $e.html(typeof value === "undefined" ? "" : ("" + value));
     }
   }
 };
@@ -1595,6 +2015,16 @@ Trillo.setSelectOptions = function($e, items, labelAttr, valueAttr, val) {
   $e.val(val);
 };
 
+Trillo.setSelectOptionsFromEnum = function($e, val) {
+  var enumName = $e.dataOrAttr("enum-name");
+  if (enumName) {
+    var enums = Trillo.enumCatalog.getEnum(enumName);
+    if (enums) {
+      Trillo.setSelectOptions($e, enums, 'n', 'v', val);
+    }
+  }
+};
+
 
 Trillo.isCheckxoxOrRadio = function($e) {
   return $e.is(":checkbox") || $e.is(":radio");
@@ -1609,6 +2039,10 @@ Trillo.getInputs = function($e) {
   .not(':input[type=button], :input[type=submit], :input[type=reset]');
 };
 
+Trillo.getReadonlyFields = function($e) {
+  return $e.find('.js-readonly-content');
+};
+
 Trillo.getFieldValue = function($e) {
   switch ($e.attr("type")) {
     case "radio":
@@ -1617,6 +2051,14 @@ Trillo.getFieldValue = function($e) {
     default:
       return $e.val();
   }
+};
+
+Trillo.getClosestNamedElem = function($e) {
+  while ($e && ($e.prop("nodeName") || "").toLowerCase() !== "html") {
+    if ($e.attr("nm")) return $e;
+    $e = $e.parent();
+  }
+  return null;
 };
 
 
@@ -1653,7 +2095,12 @@ Trillo.ViewManager = Class.extend({
         url: Trillo.Config.viewPath + viewName + Trillo.Config.viewFileExtension,
         type: 'get',
         datatype : Trillo.appContext.isTrilloServer ? "application/json" : "text/plain"
-      }).done($.proxy(this.viewLoaded, this, deferred, viewName));
+      }).done($.proxy(this.viewLoaded, this, deferred, viewName)).
+      fail(function() {
+        deferred.reject({
+          errorMsg: "Failed to load view file"
+        });
+      });
     }
    
     return deferred.promise();
@@ -1717,10 +2164,15 @@ Trillo.ChartManager = Class.extend({
       deferred.resolve(charts);
     } else {
       $.ajax({
-        url: "/model/chartList/?chartNames=" + chartsToRetrieve + "&appName=" + Trillo.appName,
+        url: "/chartList/?chartNames=" + chartsToRetrieve + "&appName=" + Trillo.appName,
         type: 'get',
         datatype : "application/json"
-      }).done($.proxy(this.chartsLoaded, this, deferred, chartNames));
+      }).done($.proxy(this.chartsLoaded, this, deferred, chartNames)).
+      fail(function() {
+        deferred.reject({
+          errorMsg: "Failed to chart"
+        });
+      });
     }
    
     return deferred.promise();
@@ -1728,11 +2180,15 @@ Trillo.ChartManager = Class.extend({
   
   chartsLoaded: function(deferred, chartNames, data) {
     var i;
+    var ch;
     for (i=0; i<data.length; i++) {
-      this.chartTable[data[i].name] = $.parseJSON(data[i].content);
+      ch = $.parseJSON(data[i].content);
+      ch.name = data[i].name;
+      ch.displayName = ch.displayName || data[i].displayName || data[i].name;
+      this.chartTable[data[i].name] = ch;
     }
     var charts = [];
-    var ch, chName;
+    var chName;
     for (i=0; i<chartNames.length; i++) {
       chName = chartNames[i];
       ch = this.chartTable[chName];
@@ -1753,25 +2209,56 @@ Trillo.Builder = Class.extend({
     this.paramsHistory = {};
   }, 
   
-  buildAppView: function() {
+  _getApp$Elem: function(routeSpecArr) {
+    /* Returns application top level element.
+     * 1. It is given by ".js-application" class.
+     * 2. Or it is "body" element if not "js-application" is present.
+     * 3. In case route is given and the there is an element with the attribute,
+     *    app-container-for="routeSpecArr[0].name", then it is used at the default application 
+     *    element. This allows another application container for special views.
+     */
+     var defaultAppE = $(".js-application");
+     if (routeSpecArr && routeSpecArr.length > 0) {
+       var alternateE = $("[app-container-for='" + routeSpecArr[0].name + "']");
+       if (alternateE.length === 0) {
+         alternateE = $("[data-app-container-for='" + routeSpecArr[0].name + "']");
+       }
+       if (alternateE.length > 0) {
+         alternateE.removeClass("hide");
+         defaultAppE.addClass("hide");
+         return alternateE;
+       }
+     }
+     
+     // alternate element processing did not yield the app level element.
+     if (defaultAppE.length > 0) {
+       return defaultAppE;
+     }
+     
+     // finally return body
+     return $("body");
+  },
+  
+  buildAppView: function(route) {
     var $body = $("body");
-    var $e = $(".js-application");
-    if ($e.length === 0) {
-      $e = $body;
-    }
+    var $e = this._getApp$Elem(this.getRouteSpecsFromRoute(route));
    
-    var viewSpec = this.udpdateViewSpecs($body, Trillo.appName, null, $body.html().indexOf("{{") > 0);
+    var viewSpec = this.udpdateViewSpecs($body, Trillo.pageName, null, $body.html().indexOf("{{") > 0);
    
     if (!viewSpec) {
       viewSpec = {};
     } else {
       if (!Trillo.appName || Trillo.appName === "") {
-        // use the application name
+        // TODO - following two conditions will never occur, review these
+        // use the viewspec name as the application name
         Trillo.appName = viewSpec.name; 
         // the app space name is recommended to be the same as appName
         if (!Trillo.appNamespace) {
           Trillo.appNamespace =  window[Trillo.appName];
         }
+      }
+      if (!Trillo.pageName || Trillo.pageName === "") {
+        this.pageName = this.appName;
       }
     }
     
@@ -1872,7 +2359,8 @@ Trillo.Builder = Class.extend({
       if (!viewSpec) {
         // create a view-spec with name
         // it will force load of view and look for view-spec within it.
-        viewSpec = {name : subrouteSpec.name};
+        viewSpec = $.extend({}, Trillo.ViewSpecFuncs);
+        viewSpec.initFromPath(subrouteSpec.name);
       }
     }
     if ($.isEmptyObject(subrouteSpec.params)) {
@@ -1917,7 +2405,6 @@ Trillo.Builder = Class.extend({
         // have stripped off the route.
         subroute = view.getNextViewName();
         if (subroute) {
-          subroute = subroute.split("/")[0];
           if (routeSpecArr[idx+1].name !== subroute) {
             routeSpecArr.length = idx + 1;
           }
@@ -1930,15 +2417,12 @@ Trillo.Builder = Class.extend({
         //} else {
           // last view is created.
           // check if the view supports default next route.
-          subroute = view.getNextViewName(historySpec);
+          subroute = view.getNextViewName(historySpec, subrouteSpec.name);
           if (subroute) {
-            var sl = subroute.split("/");
-            for (i=0; i<sl.length; i++) {
-              routeSpecArr.push({
-                name: sl[i],
-                params: {}
-              });
-            }
+            routeSpecArr.push({
+              name: subroute,
+              params: {}
+            });
           }
         //}
       }
@@ -2008,6 +2492,9 @@ Trillo.Builder = Class.extend({
   },
   
   init: function(viewSpec, currentView, prevView) {
+    if (!viewSpec.getMyPath) {
+      $.extend(viewSpec, Trillo.ViewSpecFuncs);
+    }
     var $e, $c;
     if (!currentView) {
       if (viewSpec.viewHtml) {
@@ -2030,7 +2517,7 @@ Trillo.Builder = Class.extend({
   loadTemplateThenInit: function(viewSpec, prevView) {
     var resDeferred = $.Deferred();
     var self = this;
-    var promise = Trillo.viewManager.loadView(viewSpec.viewFileName || viewSpec.name); // load view using view-manager
+    var promise = Trillo.viewManager.loadView(viewSpec.getViewFileName()); // load view using view-manager
     
     promise.done(function(viewDetail) {
       var $e = viewDetail.$e;
@@ -2064,7 +2551,8 @@ Trillo.Builder = Class.extend({
   },
   
   createView: function($e, viewSpec, prevView) {
-    var controller = this.createController(viewSpec);
+    viewSpec.params = viewSpec.params || {}; // initialize viewSpec.params with an empty object if not specified.
+    var controller = this.createController(viewSpec, prevView);
     
     controller.updateViewSpec(viewSpec); // give controller a chance to override viewSpec.
    
@@ -2082,6 +2570,8 @@ Trillo.Builder = Class.extend({
       Trillo.log.error("Could not find impl class = " + impl + ", type = " + viewSpec.type + ", defaulting to Trillo.View class");
       clsRef = Trillo.View;
     }
+    // set view type based on the impl class
+    viewSpec.type = viewSpec.type || Trillo.getViewTypeByImplClass(impl);
     viewSpec.prevView = prevView;
     var view = new clsRef($e, controller, viewSpec);
     viewSpec.view = view;
@@ -2106,7 +2596,7 @@ Trillo.Builder = Class.extend({
     if (modelLoadRequired) {
       promise = this.initM(view, true);
     } else {
-      promise = view.modelChanged();
+      promise = view.repeatShowUsingModel();
     }
     promise.done(function() {
       if (view.nextView()) {
@@ -2136,12 +2626,23 @@ Trillo.Builder = Class.extend({
     var viewSpec = view.viewSpec;
     var modelSpec = viewSpec.modelSpec;
     modelSpec = $.extend({type: "local"}, modelSpec);
+    modelSpec.params = modelSpec.params || {};
+    modelSpec.viewName = viewSpec.name;
+    // reset modelSpec
+    modelSpec._newData = null; 
+    modelSpec.parentData = null;
     viewSpec.modelSpec = modelSpec;
-    view.controller().updatModelWithParms(modelSpec, viewSpec.params);
+    if (view.updateModel) {
+      // if view specifies upateModel, give it precedence
+      view.updateModel(modelSpec, viewSpec.params);
+    }
+    if (view.controller().updateModel) {
+      view.controller().updateModel(modelSpec, viewSpec.params);
+    }
     return view.show(modelSpec, forceModelRefresh);
   },
   
-  createController: function(viewSpec) {
+  createController: function(viewSpec, prevView) {
     var ctrl = this.createControllerForName(viewSpec);
     var appNamespace = Trillo.appNamespace;
     if (!ctrl) {
@@ -2157,12 +2658,14 @@ Trillo.Builder = Class.extend({
         ctrl = new Trillo.Controller(viewSpec);
       }
     }
-    if (viewSpec.actionH) {
-      if (!this.setActionHandlerForNS(appNamespace, viewSpec, ctrl)) {
-        this.setActionHandlerForNS(window.Shared, viewSpec, ctrl);
+    if (viewSpec.bizDelegate) {
+      if (!this.setBizDelegateForNS(appNamespace, viewSpec, ctrl)) {
+        this.setBizDelegateForNS(window.Shared, viewSpec, ctrl);
       }
     }
-    
+    if (prevView) {
+      ctrl.setParentController(prevView.controller());
+    }
     return ctrl;
   },
  
@@ -2190,9 +2693,9 @@ Trillo.Builder = Class.extend({
     }
   },
   
-  setActionHandlerForNS: function(ns, viewSpec, ctrl) {
-    if (ns && ns[viewSpec.actionH]) {
-      ctrl.setActionHandler(new ns[viewSpec.actionH]({controller: ctrl}));
+  setBizDelegateForNS: function(ns, viewSpec, ctrl) {
+    if (ns && ns[viewSpec.bizDelegate]) {
+      ctrl.setBizDelegate(new ns[viewSpec.bizDelegate]({controller: ctrl}));
       return true;
     }
     return false;
@@ -2218,7 +2721,11 @@ Trillo.Builder = Class.extend({
     $.each( viewSpecs, function( key, spec ) {
       specName = key;
       spec.name = specName;
+      spec.trigger = spec.trigger || spec.name;
       spec.hasTemplateTag = hasTemplateTag;
+      if (!spec.getMyPath) {
+        $.extend(spec, Trillo.ViewSpecFuncs);
+      }
       if (specName === name || name === "") { // if the name is "" then the first viewSpec is considered my spec
         // my spec
         name = specName; // in case it was space
@@ -2227,6 +2734,12 @@ Trillo.Builder = Class.extend({
         // embedded spec
         spec.embedded = true;
         embeddedSpecs.push(spec);
+      }
+      var nextViewSpecs = spec.nextViewSpecs;
+      if (nextViewSpecs) {
+        $.each( nextViewSpecs, function( key2, spec2 ) {
+          $.extend(spec2, Trillo.ViewSpecFuncs);
+        });
       }
     });
     if (selfSpec && embeddedSpecs.length) {
@@ -2254,7 +2767,7 @@ Trillo.Builder = Class.extend({
   },
   
   getName: function(subroute) {
-    var idx = subroute.indexOf("?");
+    var idx = subroute.indexOf(";");
     if (idx >= 0) {
       return $.trim(subroute.substring(0,idx));
     }
@@ -2262,6 +2775,11 @@ Trillo.Builder = Class.extend({
   },
   
   getParams: function(subroute) {
+    var idx = subroute.indexOf(";");
+    if (idx >= 0) {
+      subroute = subroute.substring(0,idx) + "?" + subroute.substring(idx+1);
+      subroute.replace(";", "&");
+    }
     return $.url(subroute).param();
   },
  
@@ -2270,12 +2788,78 @@ Trillo.Builder = Class.extend({
     if (str.length === 0) return "";
     var query = "";
     $.each(spec.params, function(key, value) {
-      query = (query.length ? "&" : "") + (key + "=" + value);
+      query = (query.length ? ";" : "") + (key + "=" + value);
     });
-    str += (query.length ? "?"  + query : "");
+    str += (query.length ? ";"  + query : "");
     return str;
   }
 });
+
+Trillo.ViewSpecFuncs = {
+    
+    initFromPath: function(path) {
+      var idx = path.indexOf(":");
+      if (idx >= 0) {
+        this.trigger = path.substring(0, idx);
+        this.name = path.substring(idx+1);
+      } else {
+        this.name = path;
+      }
+    },
+    
+    getMyPath: function() {
+      return (this.trigger && this.trigger !== this.name ? (this.trigger + ":") : "") + this.name;
+    },
+    
+    getTrigger: function() {
+      return this.trigger ? this.trigger : this.name;
+    },
+    
+    getNextPath: function(trigger) {
+      if (!trigger || trigger.indexOf(":") >= 0) {
+        return trigger;
+      }
+      var specs = this.nextViewSpecs;
+      var res = trigger;
+      if (specs) {
+        $.each(specs, function( key, spec ) {
+          if (spec.getTrigger() === trigger) {
+            res = spec.getMyPath();
+            return false;
+          }
+        });
+      }
+      return res; 
+    },
+    
+    getDefaultNextPath: function() {
+      if (this.nextView) {
+        return this.getNextPath(this.nextView);
+      }
+      return null;
+    },
+    
+    getViewFileName: function() {
+      return this.viewFileName || this.name;
+    },
+    
+    getViewSpecByParentPath: function(parentPath) {
+      if (!parentPath) {
+        return null;
+      }
+      var specs = this.nextViewSpecs;
+      var res = null;
+      if (specs) {
+        $.each(specs, function( key, spec ) {
+          if (spec.parentPath === parentPath) {
+            res = spec;
+            return false;
+          }
+        });
+      }
+      return res; 
+    }
+};
 
 Trillo.BaseController = Class.extend({
   
@@ -2283,6 +2867,12 @@ Trillo.BaseController = Class.extend({
     this.viewSpec = viewSpec;
     this.name = viewSpec.name;
     this._view = null;
+    this._model = null;
+    this._parentController = null;
+    this._nextController = null;
+    this._embeddedControllers = [];
+    this._bizDelegate = null;
+    this.viewsInFlight = {};
   },
   
   setView: function(view) {
@@ -2293,97 +2883,150 @@ Trillo.BaseController = Class.extend({
     return this._view;
   },
   
-  setActionHandler: function(actionH) {
-    this.actionH = actionH;
+  parentView: function() {
+    return this._view.parentView();
   },
   
-  $elem: function() {
-    return this._view.$elem();
+  setBizDelegate: function(_bizDelegate) {
+    this._bizDelegate = _bizDelegate;
   },
   
-  $container: function() {
-    return this._view.$container();
-  },
-  
-  modelLoaded: function(model) {
+  bizDelegate: function() {
+    return this._bizDelegate;
   },
   
   model: function() {
-    return this._view.model();
+    return this._model;
   },
   
   modelData: function() {
-    return this._view.modelData();
+    return this._model.data;
+  },
+  
+  parentModelData: function() {
+    return this._parentController ? this._parentController.modelData() : null;
+  },
+  
+  setParentController: function(parentController) {
+    this._parentController = parentController;
   },
   
   parentController: function() {
-    var p = this._view.parentView();
-    return p ? p.controller() : null;
+    return this._parentController;
+  },
+  
+  setNextController: function(controller) {
+    this._nextController = controller;
+  },
+  
+  addEmbeddedController: function(embeddedController) {
+    this._embeddedControllers.push(embeddedController);
   },
   
   clear: function() {
   },
   
-  actionPerformed: function(actionName, $e, obj) {
+  createModel: function(modelSpec) {
+    var myDeferred = $.Deferred();
+    
+    debug.debug("BaseController.createModel() - creating new model for: " + this.viewSpec.name);
+    if (this._model) {
+      this._model.clear();
+    }
+    this._model = Trillo.modelFactory.createModel(modelSpec, this);
+    var promise;
+    if (Trillo.isPreview || Trillo.useTestData) {
+      promise = this.viewSpec.type === Trillo.ViewType.Chart && this.viewSpec.params.charts ? 
+        this._model.loadChartTestData(this.viewSpec.charts[0]) :
+        this._model.loadTestData(this.viewSpec.name);
+       
+      promise.done($.proxy(this.modelDataLoaded, this, myDeferred));
+    } else {
+      promise = this._model.loadData();
+      promise.done($.proxy(this.modelDataLoaded, this, myDeferred));
+    }
+    promise.fail(function(result) {
+      myDeferred.reject(result);
+    });
+   
+    return myDeferred.promise();
+  },
+  
+  modelDataLoaded: function(myDeferred, model) {
+    this.postProcessModel(model);
+    myDeferred.resolve(model);
+  },
+  
+  postProcessModel: function(model) {
+    
+  },
+  
+  handleClickGeneric: function($e) {
     if ($e) {
-      var actionFunc = $e.attr("action-func");
+      var actionFunc = $e.dataOrAttr("action-func");
       if (actionFunc && this[actionFunc]) {
-        this[actionFunc](obj);
+        this[actionFunc]($e, this.getSelectedObj(), this);
         return true;
       }
     }
-    if (this._actionPerformed(actionName, obj || this.getSelectedObj(), this._view)) {
+    if (this._handleClickGeneric($e.dataOrAttr("nm"), $e, this.getSelectedObj(), this)) {
       return true;
     }
-    Trillo.alert.notYetImplemented(actionName);
+    Trillo.alert.notYetImplemented($e.dataOrAttr("nm"));
     return false;
   },
   
-  _actionPerformed: function(actionName, obj, view) {
+  _handleClickGeneric: function(actionName, $e, selectedObj, targetController) {
     var f = false;
-    if (this.handleAction(actionName, obj, view)) {
+    if (this._bizDelegate && this._bizDelegate.handleAction) {
+      if (this._bizDelegate.handleAction(actionName, selectedObj, $e, targetController)) {
+        return true;
+      }
+    }
+    if (this.handleAction(actionName, selectedObj, $e, targetController)) {
       f = true;
-    } else if (this.delegateActionToParent(actionName, obj, view)) {
+    } else if (this.delegateActionToParent(actionName, selectedObj, $e, targetController)) {
       f = true;
     }
     return f;
   },
   
-  handleAction: function(actionName, obj, view) {
-    return false;
+  handleAction: function(actionName, selectedObj, $e, targetController) {
+    
   },
   
-  delegateActionToParent: function(actionName, obj, view) {
+  delegateActionToParent: function(actionName, selectedObj, $e, targetController) {
     if (this.parentController()) {
-      return this.parentController()._actionPerformed(actionName, obj, view);
+      return this.parentController()._handleClickGeneric(actionName, $e, selectedObj, targetController);
     } 
     return false;
   },
   
-  dblClicked: function($e, obj) {
-    this.actionPerformed('detail', $e, obj, this._view);
+  clicked: function($e, selectedObj, ev) {
+    return this._handleClickGeneric(selectedObj.name, $e, selectedObj, this);
   },
   
-  /** Requires this._super call */
+  dblClicked: function($e, selectedObj, ev) {
+    return this._handleClickGeneric('detail', $e, selectedObj, this);
+  },
+  
+  /** Called by BizDelegate when it completes a delegated action 
+   * options - may contain any app specific data such as original parameters, result of action etc.
+   */
   actionDone: function(options) {
-    if (this.viewSpec.postRenderer) {
-      this.viewSpec.postRenderer(options.obj._trillo_infoBlock);
-    }
-    if (this.getSelectedObj() === options.obj) {
-      this._view.setTbState();
-    }
+   
   },
   
   selectedObjChanged: function(selectedObj) {
-    // this can be overridden by custom controllers
+    // custom controllers can take some action by overriding this method.
   },
   
   getSelectedObj: function() {
-    return this._view ? this._view.selectedObj: null;
+    return null; // should be implemented by subclass
   },
   
   getClosestSelectedObj: function() {
-    var res = this._view ? this._view.selectedObj: null;
+    var res = this.getSelectedObj();
     if (!res) {
       var p = this.parentController();
       res = p ? p.getClosestSelectedObj() : null;
@@ -2416,19 +3059,23 @@ Trillo.BaseController = Class.extend({
       route = route + (str.length > 0 && route.length > 1 ? "/" : "") + str;
       return route;
     }
-    return Trillo.Config.basePath;
+    return Trillo.Config.pagePath;
+  },
+  
+  getInternalRoute: function() {
+    return "";
   },
   
   getMySubrouteAsStr: function() {
     var viewSpec = this.viewSpec;
     if (!viewSpec) return "";
-    var str = viewSpec.name + (this._view.internalRoute.length ? "/" + this._view.internalRoute : "");
+    var str = viewSpec.getMyPath() + this.getInternalRoute();
     if (str.length === 0) return "";
     var query = "";
     $.each(viewSpec.params, function(key, value) {
-      query += (query.length ? "&" : "") + (key + "=" + value);
+      query += (query.length ? ";" : "") + (key + "=" + value);
     });
-    str += (query.length ? "?"  + query : "");
+    str += (query.length ? ";"  + query : "");
     return str;
   },
   
@@ -2437,7 +3084,7 @@ Trillo.BaseController = Class.extend({
   },
   
   selectAndRoute: function(uid) {
-    return this._view.selectAndRoute(uid);
+    // implement in subclass
   },
 
   updateRoute: function(lastSegement) {
@@ -2473,16 +3120,31 @@ Trillo.BaseController = Class.extend({
     return uid;
   },
   
-  updatModelWithParms: function(modelSpec, params) {
-    
+  updateModel: function(modelSpec, params) {
+    if (this.updateModelCommonScenarios) {
+      this.updateModelCommonScenarios(modelSpec, params);
+    }
   },
 
   showView: function(viewSpec) {
+    var myDeferred = $.Deferred();
+    if (this.viewsInFlight[viewSpec.name]) {
+      myDeferred.reject();
+      return myDeferred.promise();
+    }
+    this.viewsInFlight[viewSpec.name] = viewSpec;
     viewSpec.params = viewSpec.params || {};
     viewSpec.embedded = true;
+    var self = this;
     Trillo.builder.init(viewSpec, null, this._view).done(function(view) {
-      view.postSetup();
+      if (view && view.postSetup) {
+        view.postSetup(view);
+      }
+      self.viewsInFlight[viewSpec.name] = null;
+      myDeferred.resolve(view);
     });
+    
+    return myDeferred.promise();
   },
   
   showViewByName: function(name, obj) {
@@ -2492,7 +3154,7 @@ Trillo.BaseController = Class.extend({
           data: obj
       };
     }
-    this.showView(viewSpec);
+    return this.showView(viewSpec);
   },
   
   /** Requires this._super call */
@@ -2503,44 +3165,108 @@ Trillo.BaseController = Class.extend({
     }
   },
   
-  postSetup: function() {
+  postSetup: function(view) {
    
   },
   
-  viewByName: function(viewName) {
-    if (this._view) {
-      return this._view.viewByName(viewName);
-    }
-    return null;
+  viewByName: function(name) {
+    var controller = this.controllerByName(name);
+    return controller ? controller.view() : null;
   },
   
-  controllerByName: function(viewName) {
-    var view = this.viewByName(viewName);
-    return view ? view.controller() : null;
+  controllerByName: function(name) {
+    var controller = this.findControllerByNameNextDir(name);
+    if (controller) {
+      return controller;
+    }
+    return this.findControllerByNamePrevDir(name);
+  },
+  
+  findControllerByNameNextDir: function(name) {
+    if (this.name === name) {
+      return this;
+    }
+    for (var i=0; i<this._embeddedControllers.length; i++) {
+      var controller = this._embeddedControllers[i].findControllerByNameNextDir(name);
+      if (controller) {
+        return controller;
+      }
+    }
+    if (this._nextController) {
+      return this._nextController.findControllerByNameNextDir(name);
+    }
+  },
+  
+  findControllerByNamePrevDir: function(name) {
+    if (this.name === name) {
+      return this;
+    }
+    if (this._parentController) {
+      return this._parentController.findControllerByNamePrevDir(name);
+    }
+  },
+  
+  attrChanged: function(obj, name, value, oldValue, model) {
+    var p = this.parentController();
+    if (p) {
+      p.attrChanged(obj, name, value, oldValue, model);
+    }
   },
   
   objChanged: function(obj) {
-    // override in subclass for any custom processing
+    this._view.objChanged(obj);
+    var p = this.parentController();
+    if (p) {
+      p.objChanged(obj);
+    }
   },
   
   objAdded: function(newObj, atEnd) {
-    // override in subclass for any custom processing
+    this._view.objAdded(newObj, atEnd);
+    var p = this.parentController();
+    if (p) {
+      p.objAdded(newObj, atEnd);
+    }
   },
   
   objDeleted: function(obj) {
-    // override in subclass for any custom processing
-  },
-  
-  /** Requires this._super call */
-  fieldChanged: function(name, value, valid, view, obj) {
+    this._view.objDeleted(obj);
     var p = this.parentController();
     if (p) {
-      p.fieldChanged(name, value, valid, view, obj);
+      p.objDeleted(obj);
+    }
+  },
+  
+  modelDataChanged: function(model) {
+    this._view.modelDataChanged(model);
+    var p = this.parentController();
+    if (p) {
+      p.modelDataChanged(model);
     }
   },
   
   refreshView: function(modelLoadRequired) {
-    return Trillo.builder.refresh(this._view, modelLoadRequired);
+    // implemented by subclass
+  },
+  
+  /** Requires this._super call */
+  updateTbState: function(selectedObj) {
+    // this can be overridden by custom controllers to update tools state.
+    if (this._bizDelegate && this._bizDelegate.updateTbState) {
+      this._bizDelegate.updateTbState(selectedObj);
+    }
+  },
+  
+  setToolVisible: function(name, visible) {
+    this._view.toolsMgr.setToolVisible(name, visible);
+  },
+  
+  setToolVisibleBySelector: function(selector, visible) {
+    this._view.toolsMgr.setToolVisibleBySelector(selector, visible);
+  },
+ 
+  postToolsActivate: function() {
+    // this can be overridden by custom controllers to do any custom logic related to tools.
   },
   
   /** Requires this._super call */
@@ -2554,7 +3280,24 @@ Trillo.BaseController = Class.extend({
   
   /** Requires this._super call */
   showNamedMessagesAsError: function(messages) {
-    this._view.showNamedMessagesAsError(messages);
+  },
+  
+  updateTitle: function() {
+  },
+  
+  modelStateChanged: function(undoLen, redoLen) {
+  },
+  
+  undoing: function(stateChange, firstInTx) {
+  },
+  
+  redoing: function(stateChange, firstInTx) {
+  },
+  
+  undone: function(stateChange, firstInTx) {
+  },
+  
+  redone: function(stateChange, firstInTx) {
   }
 });
 Trillo.Page = Class.extend({
@@ -2576,7 +3319,7 @@ Trillo.Page = Class.extend({
     var resDeferred = $.Deferred();
     if (!this._view) {
       var self = this;
-      var promise = Trillo.builder.buildAppView();
+      var promise = Trillo.builder.buildAppView(route);
       if (!promise) {
         // app _view can not be built
         resDeferred.promise();
@@ -2614,7 +3357,7 @@ Trillo.Page = Class.extend({
     var promise = Trillo.builder.build(route, this._view);
     promise.done(function(listOfViews) {
       if (listOfViews.length > 0) {
-        listOfViews[0].postSetup();
+        listOfViews[0].postSetup(listOfViews[0]);
         resDeferred.resolve(listOfViews);
       }
     });
@@ -2627,7 +3370,7 @@ Trillo.Page = Class.extend({
     var view = this._view;
     if (view) {
       if (view.viewSpec.nextView) {
-        return view.viewSpec.nextView;
+        return view.viewSpec.getDefaultNextPath();
       } else {
         return view.getNextViewName();
       }
@@ -2663,7 +3406,7 @@ Trillo.Page = Class.extend({
   
   fileUploadSuccessful: function(option) {
     // one of the property of option is targetViewName. Look up target view and inform it.
-    var target = this._view.viewByName(option.targetViewName);
+    var target = this._view.controller().viewByName(option.targetViewName);
     if (target) {
       target.controller().fileUploadSuccessful(option);
     }
@@ -2671,7 +3414,7 @@ Trillo.Page = Class.extend({
   
   fileUploadFailed: function(option) {
     // one of the property of option is targetViewName. Look up target view and inform it.
-    var target = this._view.viewByName(option.targetViewName);
+    var target = this._view.controller().viewByName(option.targetViewName);
     if (target) {
       target.controller().fileUploadFailed(option);
     }
@@ -2733,10 +3476,15 @@ Trillo.CatalogsLoader = Class.extend({
     
     if (Trillo.appContext.isTrilloServer) {
       $.ajax({
-        url: "/model/loadCatalogs?appName=" + Trillo.appName,
+        url: "/loadCatalogs?appName=" + Trillo.appName,
         type: 'get',
         datatype : "application/json"
-      }).done($.proxy(this.catalogsLoaded, this, deferred));
+      }).done($.proxy(this.catalogsLoaded, this, deferred)).
+      fail(function() {
+        deferred.reject({
+          errorMsg: "Failed to load catalogs"
+        });
+      });
     } else {
       deferred.resolve();
     }
@@ -2757,6 +3505,27 @@ Trillo.CatalogsLoader = Class.extend({
   
 });
 
+Trillo.BizDelegate = Class.extend({
+ 
+  initialize : function(options) {
+    this._controller = options.controller;
+  },
+  
+  controller: function() {
+    return this._controller;
+  },
+  
+  informActionDone: function(options) {
+    if (this._controller && this._controller.actionDone) {
+      this._controller.actionDone(options);
+    }
+  },
+  
+  handleAction: function(actionName, selectedObj, $e, targetController) {
+    return false;
+  }
+});
+
 Trillo.Main = Class.extend({
   initialize : function() {
     
@@ -2764,7 +3533,7 @@ Trillo.Main = Class.extend({
     
     this.setupContextAndConfig();
     
-    var initClassName = Trillo.appContext.app.appInitClass || "Trillo.AppInitializer";
+    var initClassName = Trillo.appContext.page.appInitClass || "Trillo.AppInitializer";
     
     var clsRef = Trillo.getRefByQualifiedName(initClassName);
     
@@ -2787,19 +3556,26 @@ Trillo.Main = Class.extend({
       };
     }
     
-    if (!Trillo.appContext.app) {
-      Trillo.appContext.app = {
+    if (!Trillo.appContext.page) {
+      Trillo.appContext.page = {
         name : "",
         appInitClass: "Trillo.AppInitializer"
       };
     }
     
-    Trillo.appName = Trillo.appContext.app.name;
+    Trillo.appName = Trillo.appContext.appName;
+    Trillo.orgName = Trillo.appContext.orgName;
+    Trillo.pageName = Trillo.appContext.pageName || Trillo.appContext.appName;
     Trillo.appNamespace = window[Trillo.appName];
     Trillo.isPreview = !!$.url(location.href).param("preview");
+    Trillo.useTestData = !!Trillo.appContext.page.useTestData;
     
     if (!(Trillo.Config.basePath)) {
       Trillo.Config.basePath = Trillo.appContext.basePath ? ("/" + Trillo.appContext.basePath) : "/";
+    }
+    
+    if (!(Trillo.Config.pagePath)) {
+      Trillo.Config.pagePath = Trillo.appContext.pagePath ? ("/" + Trillo.appContext.pagePath) : Trillo.Config.basePath;
     }
     
     if (!(Trillo.Config.viewPath)) {

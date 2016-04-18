@@ -48,6 +48,6 @@ ToDo.ToDoListC = Trillo.Controller.extend({
         self.showResult(result);
       });
     }
-    this._super(name, value, valid, view, obj);
+    this._super(obj, name, value, oldValue, model);
   }
 });

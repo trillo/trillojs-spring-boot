@@ -122,7 +122,7 @@
 .trillo-busy-indicator-small {
   width: 16px;
   height: 16px;
-  background-image: url('/shared/static/img/spinning-arrow.gif');
+  background-image: url('../img/spinning-arrow.gif');
 }
 
 /* --------------------------------------------------------------------------------------------------------- */
@@ -193,7 +193,7 @@ It is shown at the right bottom of a large collection view. */
     left: auto;
 }
 
-.trillo-dropdown-menu > li > a {
+.trillo-dropdown-menu > li > a, .trillo-dropdown-menu > li > span {
     line-height: 20px;
     white-space: nowrap;
     margin: 8px 8px;
@@ -208,6 +208,7 @@ It is shown at the right bottom of a large collection view. */
 
 .trillo-context-menu .dropdown-menu { /* dropdown-menu is from bootstrap */
   position: static;
+  display: block;
 }
 
 
