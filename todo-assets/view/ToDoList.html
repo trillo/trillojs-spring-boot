@@ -1,22 +1,25 @@
 <script spec="view" type="application/json">
   {
-    "ToDoList" : {
-      "controller" : "ToDo.ToDoListC",
-      "container" : "main-container",
-      "impl" : "Trillo.CollectionView",
-      "modelSpec" : {
-        "impl" : "ToDo.ListModel",
-        "observeChanges": true,
-        "newItemsAtEnd": true
-      },
-      "type" : "table"
-    }
+    "name" : "ToDoList",
+    "controller" : "ToDo.ToDoListC",
+    "container" : "main-container",
+    "impl" : "Trillo.CollectionView",
+    "modelSpec" : {
+      "impl" : "ToDo.ListModel"
+    },    
+    "apiSpec" : {
+      "impl" : "Trillo.RestAdapter",
+      "serviceUrl" : "/todo/taskList"
+    },
+    "type" : "table"
   }
 </script>
 
 <div class="to-do-list-container">
-  <div class="to-do-list-tool-bar js-toolbar-tools">
-    <button class="btn btn-primary btn-xs js-tool" type="button" nm="newTask">New Task</button>
+  <div class="to-do-list-tool-bar-c">
+    <div class="to-do-list-tool-bar js-toolbar-tools">
+      <button class="btn btn-primary btn-xs js-tool" type="button" nm="newTask">New Task</button>
+    </div>
   </div>
   <div class="trillo-canvas js-grid">
     <div class="trillo-list-header js-heading-row">
@@ -32,7 +35,7 @@
       </div>
     </div>
     <div class="trillo-list-row js-content-row">
-      <div class="trillo-content-c js-readonly-content todo-list-completed text-centered">
+      <div class="trillo-content-c js-readonly-content todo-list-completed">
         <input type="checkbox" nm="completed">
       </div>
       <div class="trillo-content-c js-readonly-content" nm="priority">

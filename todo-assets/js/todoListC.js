@@ -14,7 +14,7 @@ ToDo.ToDoListC = Trillo.Controller.extend({
       this.showView({
         name: "NewTaskForm",
         impl: "Trillo.FormView",
-        postUrl: "newTask",
+        postUrl: "/todo/newTask",
         type: Trillo.ViewType.Form,
         container: 'trillo-dialog-container',
         modelSpec : {
@@ -41,8 +41,8 @@ ToDo.ToDoListC = Trillo.Controller.extend({
     var self = this;
     if (name === "completed") {
       $.ajax({
-        url: "updateCompleted?uid=" + obj.uid + "&completed=" + value,
-        type: 'get',
+        url: "/todo/updateCompleted?uid=" + obj.uid + "&completed=" + value,
+        type: 'post',
         datatype : "application/json"
       }).done(function(result) {
         self.showResult(result);

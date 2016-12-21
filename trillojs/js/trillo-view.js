@@ -17,12 +17,12 @@ Trillo.Controller = Trillo.BaseController.extend({
     return this._view.$container();
   },
   
-  getSelectedObj: function() {
-    return this._view ? this._view.selectedObj: null;
+  refreshAllViews: function() {
+    return Trillo.builder.refresh(this._view);
   },
   
-  refreshView: function(modelLoadRequired) {
-    return Trillo.builder.refresh(this._view, modelLoadRequired);
+  refreshViews: function(listOfViews) {
+    return Trillo.builder.refresh(this._view, listOfViews);
   },
   
   getInternalRoute: function() {
@@ -37,38 +37,6 @@ Trillo.Controller = Trillo.BaseController.extend({
     this._view.showNamedMessagesAsError(messages);
   },
   
-  updateModelCommonScenarios: function(modelSpec, params) {
-    var p = this.parentController();
-    var pview = p ? p.view() : null;
-    if (pview && pview.selectedObj && Trillo.uidToId(pview.selectedObj.uid) === "-1") {
-      var parentViewType = pview.viewSpec.type;
-      if (parentViewType === Trillo.ViewType.Tree || Trillo.isCollectionView(parentViewType)) {
-        // an object with -1 uid is selected in the tree or collection view. Use it as as the data for this model
-        modelSpec._newData = pview.selectedObj;
-        return;
-      }
-    }
-    modelSpec.parentData = pview ? (pview.selectedObj ? pview.selectedObj : pview.data) : null;
-    if (modelSpec.impl === "Trillo.ServiceModel") {
-      p = this.parentController();
-      var obj = p ? p.getClosestSelectedObj() : null;
-      modelSpec.params = $.extend({}, obj, this.viewSpec.params);
-    } else {
-      var contextUid = this.getContextUid();
-      if (modelSpec.impl === "Trillo.CollectionModel") {
-        if (!modelSpec.filter) {
-          modelSpec.params.assocUid= contextUid;
-        }
-      } else {
-        if (this.viewSpec.type !== Trillo.ViewType.Tree && this.viewSpec.type !== Trillo.ViewType.NavTree) {
-          modelSpec.params.uid = contextUid;
-        } else {
-          modelSpec.params.assocUid = contextUid;
-        }
-      }
-    }
-  },
-
   /*
    * By default it lets the view compute its own title.
    * Custom controller can override this and set own title by calling
@@ -85,15 +53,23 @@ Trillo.Controller = Trillo.BaseController.extend({
     } else if (actionName === "ok") {
       this.ok();
       return true;
-    } else if (actionName === "detail") {
-      return this.doDefaultDetailView(selectedObj);
     } else if (actionName === 'upload') {
       this.doUpload();
       return true;
     } else if (actionName === "hide") {
       this._view.hide();
       return true;
-    } 
+    } else if (actionName === "_home" || actionName === "_appHome") {
+      // disable history until reload of the page and one cycle of routing.
+      // router enables it after one cycle of routing is completed.
+      Trillo.navHistory.setDisabled(true);
+      // still return the false so that the "preventDefault" is not called.
+      // These actions have "a" element with a navigable href. Due to default
+      // action page will reload with the specified href.
+      return false;
+    } else if (this.viewSpec.type != "actionTool" && this.viewSpec.type != "menu") {
+      return this.doTriggerNextView(actionName, selectedObj);
+    }
     return false;
   },
   
@@ -107,7 +83,17 @@ Trillo.Controller = Trillo.BaseController.extend({
   },
   
   close: function() {
+    if (this.closing) {
+      this.closing(this._view);
+    }
     this._view.clear();
+  },
+  
+  closing: function(view) {
+    var p = this.parentController();
+    if (p && p.closing) {
+      p.closing(view);
+    }
   },
   
   ok: function() {
@@ -116,16 +102,49 @@ Trillo.Controller = Trillo.BaseController.extend({
     }
   },
   
-  doDefaultDetailView: function(selectedObj) {
-    var p = this.parentController();
-    if (p && Trillo.isCollectionView(this.viewSpec.type) && 
-        p.viewSpec.type === Trillo.ViewType.Tree ) {
-      var item = p.view().tree.getItemByUid(selectedObj.uid);
-      if (item) {
-        return p.selectAndRoute(selectedObj.uid);
-      }
+  // This is useful when a left tree displays a hierarchy, where a parent node represents a collection of objects
+  // and its children represent each object - for example in case of Trillo.Dev view tree,
+  // a node represents the name of application (folder) and each child represents a view.
+  // Selecting a folder node displays the collection view on the right side. When user selects 
+  // detail of an object in the collection (using "Detail" button or double click), the corresponding child node 
+  // is selected in the tree and its detail view is shown. This is default behavior for a
+  // folder->sub-folder_...->object kind of hierarchy.
+  doTriggerNextView: function(actionName, selectedObj) {
+    if (!selectedObj) {
+      selectedObj = {};
     }
-    return false;
+    var nextViewSpec = this.viewSpec.getNextViewSpecByTrigger(actionName);
+    if (nextViewSpec) {
+      if (nextViewSpec.type === "actionTool") {
+        return false;
+      }
+      if (nextViewSpec.type === "page") {
+        return false;
+      }
+      if (nextViewSpec.dialog) {
+        this.showViewByName(nextViewSpec.name, selectedObj);
+        return true;
+      }
+      var path;
+      if (nextViewSpec.absoluteRoute) {
+        path = nextViewSpec.name + ";uid=" + selectedObj.uid;
+        this.setRoute(path);
+      } else {
+        path = nextViewSpec.name;
+        this.updateRoute(path);
+      }
+      return true;
+    } else {
+      var p = this.parentController();
+      if (p && Trillo.isCollectionView(this.viewSpec.type) && 
+          p.viewSpec.type === Trillo.ViewType.Tree ) {
+        var item = p.view().tree.getItemByUid(selectedObj.uid);
+        if (item) {
+          return p.selectAndRoute(selectedObj.uid);
+        }
+      }
+      return false;
+    }
   },
   
   doUpload: function() {
@@ -159,7 +178,15 @@ Trillo.Controller = Trillo.BaseController.extend({
   },
   
   fileUploadFailed: function(option) {
-    this.$elem().find(".js-upload-alert").html(option.error).show();
+    this.showFileUploadError(option.error);
+  },
+  
+  showFileUploadError: function(error) {
+    this.$elem().find(".js-upload-alert").html(error).show();
+  },
+  
+  clearFileUploadError: function(option) {
+    this.$elem().find(".js-upload-alert").html("").hide();
   },
   
   
@@ -213,6 +240,9 @@ Trillo.Controller = Trillo.BaseController.extend({
     if (p) {
       p.afterPost(result, view);
     } else {
+      if (result.status !== "failed") {
+        (view || this.view()).$e.find('form')[0].reset();
+      }
       this.showResult(result);
     }
   }
@@ -224,6 +254,8 @@ Trillo.Tools = Class.extend({
     this.$toolsE = options.$toolsE;
     this.$toolsContainer = options.$toolsContainer;
     this.toolSelectedMethod = $.proxy(this.toolSelected, this);
+    this.actionablToolElems = [];
+    this.makeActionableToolElemsList(this.$toolsE, this.actionablToolElems);
   },
   activate: function() {
     if (this.$toolsContainer) {
@@ -232,7 +264,7 @@ Trillo.Tools = Class.extend({
     if (!this.$toolsE.is('.js-app-managed-visibility')) {
       this.$toolsE.removeClass("hide");
     }
-    this.$toolsE.show();
+    this.$toolsE.css("display", "");
     this.$toolsE.off("click", this.toolSelectedMethod);
     this.$toolsE.on("click", this.toolSelectedMethod);
   },
@@ -244,34 +276,36 @@ Trillo.Tools = Class.extend({
     }
   },
   toolSelected: function(ev) {
-    Trillo.contextMenuManager.hideCurrentContextMenu();
-    var $e = $(ev.target);
-    var tag = $e.prop("tagName").toLowerCase();
-    if (!$e.hasClass("js-tool") && tag !== "a" && tag !== "button") {
-      var $e2 = $e.find("button");
-      if ($e2.length === 0) {
-        $e2 = $e.find("a");
-      }
-      if ($e2.length === 0) {
-        $e2 = $e.parent();
-        tag = $e2.prop("tagName").toLowerCase();
-        if (tag !== "a" && tag !== "button") {
-          return;
-        }
-      }
-      $e = $e2;
+    Trillo.hideCurrentOverlays(true, false);
+    var $e = Trillo.getActualTarget(ev);
+    if (!$e) {
+      return;
     }
-   
+    
     if ($e.hasClass("dropdown-toggle")) {
       return;
     }
     if (ev) {
       ev.stopPropagation();
-      ev.preventDefault();
     }
     $e.closest("." + Trillo.CSS.buttonGroup + "." + Trillo.CSS.buttonGroupOpen).removeClass(Trillo.CSS.buttonGroupOpen);
     $e.closest("." + Trillo.CSS.dropdown + "." + Trillo.CSS.dropdownOpen).removeClass(Trillo.CSS.dropdownOpen);
-    this.mgr.handleClickGeneric($e);
+    
+    
+    if (this.mgr.handleClickGeneric($e)) {
+      $(".js-navbar-toggle").each(function () {
+        $($(this).data("target")).removeClass("in").addClass('collapse');
+      });
+      ev.preventDefault();
+    } else {
+      var tag = $e.prop("tagName").toLowerCase();
+      if (tag === "a") {
+        var href = $e.attr("href");
+        if (!href || href === "#") {
+          ev.preventDefault();
+        }
+      }
+    } 
   },
   
   setDisabled: function(disabled) {
@@ -282,6 +316,29 @@ Trillo.Tools = Class.extend({
       this.$toolsE.find("button").removeAttr("disabled");
       this.$toolsE.find("a").removeAttr("disabled");
     }
+  },
+  
+  makeActionableToolElemsList: function($c, l) {
+    var self = this;
+    $.each($c.children(), function(idx, e) {
+      var $e = $(e);
+      var tag = $e.prop("tagName").toLowerCase();
+      if ($e.hasClass("js-tool") || tag === "a" || tag === "button") {
+        l.push($e);
+      } else {
+        self.makeActionableToolElemsList($e, l);
+      }
+    });
+  },
+  
+  allHidden: function() {
+    var l = this.actionablToolElems;
+    for (var i=0; i<l.length; i++) {
+      if (!l[i].hasClass("hide") && l[i].css("display") !== "none") {
+        return false;
+      } 
+    }
+    return true;
   }
 });
 
@@ -290,53 +347,60 @@ Trillo.ToolManager = Class.extend({
   initialize : function(view) {
     this._view = view;
     this._controller = view.controller();
-    this.$toolbarTools = null;
-    this.$hoverTools = null;
-    this.$contextTools = null;
+    this.toolbarTools = null;
+    this.hoverTools = null;
+    this.contextTools = null;
     this.tools = [];
   
+    var self = this;
     var $e = view.$elem();
     
-    var $te, t;
-    if (view.$container()) {
-      var $tce = view.getToolBar$Elem();
-      if ($tce.length > 0) {
-        this.$toolbarTools = this.makeTools($e.find(".js-toolbar-tools"), $tce, true);
+    if (view.viewSpec.type != "menu") {
+      var $te, t;
+      if (view.$container()) {
+        var $tce = view.getToolBar$Elem();
+        if ($tce.length > 0) {
+          this.toolbarTools = this.makeTools($e.find(".js-toolbar-tools"), $tce, true);
+        }
       }
+      
+      this.hoverTools = this.makeTools($e.find(".js-hover-tools"), null, true);
+      this.contextTools = this.makeTools($e.find(".js-context-menu"), null, true);
+      
+      $e.find(".js-tool").each(function() {
+        self.makeTools($(this), null, false);
+      });
+    } else {
+      $e.find(".js-menu-item-trigger, .js-menu-item a, .js-menu-item button, " +
+      		".js-menu-item :input[type=button], .js-menu-item :input[type=submit], " +
+      		".js-menu-item :input[type=reset]").each(function() {
+        self.makeTools($(this), null, false);
+      });
     }
-    
-    this.$hoverTools = this.makeTools($e.find(".js-hover-tools"), null, true);
-    this.$contextTools = this.makeTools($e.find(".js-context-menu"), null, true);
-    
-    var self = this;
-    $e.find(".js-tool").each(function() {
-      self.makeTools($(this), null, false);
+    $e.find(".js-popover-trigger").each(function() {
+      self.makePopover($(this));
     });
-    
   },
   
   makeTools: function($te, $tce, remove) {
-    if (this.belongsToView($te)) {
+    if (Trillo.belongsToView($te, this._view.name)) {
       $te.data("for-view", this._view.name);
       if (remove) {
         $te.remove();
       }
       var t = new Trillo.Tools({$toolsE : $te, $toolsContainer : $tce, mgr: this});
       this.tools.push(t);
-      return $te;
+      return t;
     }
     return null;
   },
   
-  belongsToView: function($te) {
-    // an element, that has "for-view" attribute, is matched with the view name.
-    // if it does not have "for-view" attr or the value of attr is same as the view name then
-    // the element belongs to this view.
-    if ($te.length === 0) {
-      return false;
+  makePopover: function($te) {
+    if (Trillo.belongsToView($te, this._view.name)) {
+      $te.data("for-view", this._view.name);
+      Trillo.popoverManager.createPopoverForTrigger($te);
     }
-    var temp = $te.dataOrAttr("for-view");
-    return !temp || temp === this._view.name;
+    return null;
   },
   
   activate: function() {
@@ -356,7 +420,12 @@ Trillo.ToolManager = Class.extend({
   },
   
   handleClickGeneric: function($e) {
-    return this._controller.handleClickGeneric($e);
+    if (this._controller.handleClickGeneric($e)) {
+      Trillo.popoverManager.hideCurrentPopupIfContains($e);
+      return true;
+    } else {
+      return false;
+    }
   },
   
   setTbState: function(obj) {
@@ -371,23 +440,51 @@ Trillo.ToolManager = Class.extend({
       var cls = Trillo.uidToClass(obj.uid);
       if (cls) {
         for (i=0; i<tools.length; i++) {
-          Trillo.findAndSelf(tools[i].$toolsE, '[data-for-class="' + cls + '"]').show().removeClass("hide");
+          Trillo.findAndSelf(tools[i].$toolsE, '[data-for-class="' + cls + '"]').css("display", "").removeClass("hide");
         }
       }
       for (i=0; i<tools.length; i++) {
         if (tools[i].$toolsE.is(':not([data-for-class])') && !tools[i].$toolsE.is('.js-context-menu') && 
             !tools[i].$toolsE.is('.js-app-managed-visibility')) {
-          tools[i].$toolsE.show().removeClass("hide");
+          tools[i].$toolsE.css("display", "").removeClass("hide");
         }
       }
     }
+    
     this._controller.updateTbState(obj);
+  },
+  
+  setPopoverTriggerState: function($tce, popoverToolsVisible) {
+    var tools = this.tools;
+    var $e = this._view.$elem();
+    var $te;
+    var i;
+    if (!popoverToolsVisible) {
+      for (i=0; i<tools.length; i++) {
+        popoverToolsVisible = !tools[i].allHidden();
+        if (popoverToolsVisible) {
+          break;
+        }
+      }
+    }
+    $e.find(".js-popover-trigger").each(function() {
+      $te = $(this);
+      if (popoverToolsVisible) {
+        $te.removeClass("trillo-trigger-has-no-content");
+      } else {
+        $te.addClass("trillo-trigger-has-no-content");
+      }
+    });
+    return popoverToolsVisible;
   },
  
   showContextMenu: function(x, y) {
-    if (this.$contextTools) {
-      Trillo.contextMenuManager.showContextMenu(this.$contextTools, x, y);
-      return true;
+    if (this.contextTools) {
+      this._controller.beforeShowContextMenu(this.contextTools.$toolsE);
+      if (!this.contextTools.allHidden()) {
+        Trillo.contextMenuManager.showContextMenu(this.contextTools.$toolsE, x, y);
+        return true;
+      }
     }
     return false;
   },
@@ -402,7 +499,7 @@ Trillo.ToolManager = Class.extend({
     var i;
     if (visible) {
       for (i=0; i<tools.length; i++) {
-        Trillo.findAndSelf(tools[i].$toolsE, selector).show().removeClass("hide");
+        Trillo.findAndSelf(tools[i].$toolsE, selector).css("display", "").removeClass("hide");
       }
     } else {
       for (i=0; i<tools.length; i++) {
@@ -426,7 +523,7 @@ Trillo.ToolManager = Class.extend({
   
   addToolsWithInElement: function($e) {
     var $te = $e.find(".js-tool");
-    if (this.belongsToView($te)) {
+    if (Trillo.belongsToView($te, this._view.name)) {
       var t = new Trillo.Tools({$toolsE : $te, mgr: this});
       this.tools.push(t);
       return t;
@@ -436,10 +533,10 @@ Trillo.ToolManager = Class.extend({
   
   enableTool: function(name, enable) {
     var selector = '[nm="' + name + '"]';
-    this.enableToolSelector(selector, enable);
+    this.enableToolBySelector(selector, enable);
   },
   
-  enableToolSelector: function(selector, enable) {
+  enableToolBySelector: function(selector, enable) {
     var tools = this.tools;
     var i;
     if (enable) {
@@ -463,9 +560,9 @@ Trillo.InfoElementRepo = Class.extend({
     this.table = {}; // template element by elemKey
     this.tableOfList = {}; // elements created using template and available for use
   },
-  addTemplate: function($e, elemKey, hasTemplateTag) {
+  addTemplate: function($e, elemKey) {
     $e.show();
-    this.table[elemKey] = new Trillo.InfoElement(elemKey, $e, true, hasTemplateTag);
+    this.table[elemKey] = new Trillo.InfoElement(elemKey, $e, true);
   },
   getE: function(elemKey, obj) {
     var l = this.tableOfList[elemKey];
@@ -506,7 +603,7 @@ Trillo.InfoElementRepo = Class.extend({
     var infoBlock;
     var res = [];
     infoE.$rootE.addClass(Trillo.CSS.positionOutside);
-    document.body.appendChild(infoE.e);
+    canvas.canvasE.appendChild(infoE.e);
     var maxH = 0;
     var h;
     var i;
@@ -529,7 +626,7 @@ Trillo.InfoElementRepo = Class.extend({
         dw = dw / $el.length;
         $el.each(function() {
           $e = $(this);
-          percent = (($e.width() + dw) / w) * 100;
+          percent = Math.round((($e.width() + dw) / w) * 100);
           $e.css("width", percent + "%");
           colWidths.push(percent);
         });
@@ -570,7 +667,7 @@ Trillo.InfoElementRepo = Class.extend({
     }
     infoE.$rootE.removeClass(Trillo.CSS.positionOutside);
     infoE.clear();
-    document.body.removeChild(infoE.e);
+    canvas.canvasE.removeChild(infoE.e);
     return res;
   },
   makeAutoInfoBlockList: function(infoE, elemKey, l, canvas) {
@@ -600,21 +697,18 @@ Trillo.InfoElement = Class.extend({
    * @param $rootE - jquery object for the element
    * @param isTemplate - if true it means it is constructing an object that will be used as template to create 
    *                     more objects with similar element
-   * @param hasTemplateTag - indicates if the element's html has mustache tags ({{...}}). If it has tags then 
-   *                         a different logic is used to construct new elements.
    */
-  initialize : function(elemKey, $rootE, isTemplate, hasTemplateTag) {
+  initialize : function(elemKey, $rootE, isTemplate) {
     this.$rootE = $rootE;
     this.elemKey = elemKey;
     this.e = $rootE[0];
     this.elements = [];
-    this.elClasses = [];
     this.hasTemplateTokens = false;
     this.requiresPositioning = true;
     if (isTemplate) {
-      if (hasTemplateTag) {
+      var html = $rootE[0].outerHTML;
+      if (html.indexOf("{{") >= 0) {
         debug.debug("Trillo.InfoElement - parsing using Mustache");
-        var html = $rootE[0].outerHTML;
         var tokens = Mustache.parse(html);
         // tokens .length === 1 means that entire template is one token and there is no mustache directive ({{...}}) present.
         if (tokens.length > 1) {
@@ -638,7 +732,7 @@ Trillo.InfoElement = Class.extend({
     var e;
     for (var i=0; i<el.length; i++) {
         e = el[i];
-        if (e.getAttribute("nm")) {
+        if (!Trillo.isActionElement($(e)) && e.getAttribute("nm")) {
           this.elements.push(e);
         }
     }
@@ -671,12 +765,7 @@ Trillo.InfoElement = Class.extend({
     var e, el = this.elements, n = el.length;
     for (var i=0; i<n; i++) {
       e = el[i];
-      if (this.elClasses[i]) {
-        $(e).removeClass(this.elClasses[i]);
-        this.elClasses[i] = null;
-      } else {
-        Trillo.setFieldValue($(e), null, false);
-      }
+      Trillo.setFieldValue($(e), null, false);
     }
   },
   copyIt: function(obj) {
@@ -789,16 +878,24 @@ Trillo.InfoBlock = Class.extend({
     this.y += dy;
   },
   clicked: function(ev) {
-    Trillo.contextMenuManager.hideCurrentContextMenu();
+    Trillo.hideCurrentOverlays(true, false);
+    var isAnchorWithoutHref = false;
     if (ev && !$(ev.target).is(":input")) {
       ev.stopPropagation();
+      var $t = $(ev.target);
+      if ($t.prop("tagName").toLowerCase() == "a") {
+        var href = $t.attr("href");
+        if (!href || href === "#") {
+          isAnchorWithoutHref = true;
+        }
+      }
     }
-    if (this.canvas.clicked(this, ev)) {
+    if (this.canvas.clicked(this, ev) || isAnchorWithoutHref) {
       ev.preventDefault();
     }
   },
   dblClicked: function(ev) {
-    Trillo.contextMenuManager.hideCurrentContextMenu();
+    Trillo.hideCurrentOverlays(true, false);
     if (ev && !$(ev.target).is(":input")) {
       ev.stopPropagation();
     }
@@ -866,7 +963,8 @@ Trillo.Canvas = Class.extend({
     this.actualScrollTimer = null;
     this.showTimer = null;
     this.isScrollListenerAdded = false;
-    if (Trillo.isTouchSurface) {
+    this.nonNativeSB = parent.$_sb;
+    if (Trillo.isTouchSurface && !this.nonNativeSB) {
       document.addEventListener('touchstart', $.proxy(this.scrollListener, this));
     }
     this.$pagination = $('.js-pagination');
@@ -882,7 +980,20 @@ Trillo.Canvas = Class.extend({
       }
     }
     
+    var $ce = this.$canvasE;
     this.sortM = $.proxy(this.doSort, this);
+    var temp = $ce.attr("row-gap");
+    this.rowGap = temp ? parseInt(temp, 10) : Trillo.Options.V_MARGIN;
+    temp = $ce.attr("top-row-gap");
+    this.topRowGap = temp ? parseInt(temp, 10) : Trillo.Options.V_MARGIN_TOP_ROW;
+    temp = $ce.attr("col-gap");
+    this.colGap = temp ? parseInt(temp, 10) : Trillo.Options.H_MARGIN;
+    temp = $ce.attr("max-cols");
+    this.maxCols = temp ? parseInt(temp, 10) : -1;
+    temp = $ce.attr("h-align");
+    this.hAlign = temp || "auto";
+    temp = $ce.attr("auto-select");
+    this.autoSelect = temp && temp.toLowerCase() === "true";
   },
   
   windowResized : function() {
@@ -908,7 +1019,21 @@ Trillo.Canvas = Class.extend({
     this.clearActualScrollTimer();
     this.$pagination.hide();
     this.removeScrollListener();
-    $(window).scrollTop(0);
+    this.setScrollBarPos(0);
+  },
+  setScrollBarPos: function(v) {
+    if (this.nonNativeSB) {
+      this.parent.setScrollBarPos(0);
+    } else {
+      $(window).scrollTop(0);
+    }
+  },
+  getScrollBarPos: function() {
+    if (this.nonNativeSB) {
+      return this.parent.getScrollBarPos();
+    } else {
+      return $(document).scrollTop();
+    }
   },
   objAdded: function(newObj, atEnd) {
     var il = Trillo.infoElementRepo.makeInfoBlockList(this.elemKey, [newObj], this);
@@ -925,8 +1050,7 @@ Trillo.Canvas = Class.extend({
     }
     this.refresh();
     if (atEnd) {
-      var $e = this.$canvasE.parent();
-      $e.scrollTop($e.prop('scrollHeight'));
+      this.setScrollBarPos(this.contentH);
     }
   },
   objChanged: function(item) {
@@ -955,6 +1079,7 @@ Trillo.Canvas = Class.extend({
     this.layout();
     this.showChildren();
     this.updatePagination();
+    this.parent.updateScrollBar();
   },
   showHeader: function() {
     var $h = this.$headerRow;
@@ -985,14 +1110,20 @@ Trillo.Canvas = Class.extend({
       nCols = 1;
       colWidth = $(this.$canvasE).width();
     } else {
-      colWidth = (n > 0 ? l[0].w : 0) + Trillo.Options.H_MARGIN;
-      nCols = Math.floor(($(this.$canvasE).width() - Trillo.Options.H_MARGIN) / colWidth);
+      colWidth = (n > 0 ? l[0].w : 0) + this.colGap;
+      nCols = Math.floor(($(this.$canvasE).width() - this.colGap) / colWidth);
       if (nCols <= 0) nCols = 1;
+      if (this.maxCols > 0 && nCols > this.maxCols) {
+        nCols = this.maxCols;
+      }
+      if (nCols === 1) {
+        colWidth -= this.colGap;
+      }
     }
     
     var yStart = this.showHeader();
     if (yStart === 0) {
-      yStart = this.isListViewMode ? 0 : Trillo.Options.V_MARGIN_TOP_ROW;
+      yStart = this.isListViewMode ? 0 : this.topRowGap;
     }
   
     var ys = [];
@@ -1020,7 +1151,7 @@ Trillo.Canvas = Class.extend({
         w = temp;
       }
       
-      temp = y + o.h + (this.isListViewMode ? 0 : Trillo.Options.V_MARGIN);
+      temp = y + o.h + (this.isListViewMode ? 0 : this.rowGap);
       ys[idx] = temp;
       if(temp > h) {
         h = temp;
@@ -1032,9 +1163,15 @@ Trillo.Canvas = Class.extend({
     this.contentW = this.$canvasE.outerWidth();
     this.contentH = h + (this.page.pageNumber < this.page.numberOfPages ? Trillo.Options.BOTTOM_SPACE_FOR_INF_SCROLL : 0);
     this.$canvasE.css({height: this.contentH});
-    if (!this.isListViewMode) {
+    var hAlign = this.hAlign;
+    if (!this.isListViewMode && this.hAlign !== "left") {
       var delta =  Math.floor((this.contentW - w) / 2);
-      if (delta < w / 4) {
+      if ((hAlign === "auto") && (delta > w / 4)) {
+        delta = 0;
+      } else if (hAlign == "right") {
+        delta = delta * 2;
+      }
+      if (delta > 0) {
         for(i = 0; i < n; i++) {
           o = l[i];
           o.move(delta, 0);
@@ -1067,7 +1204,7 @@ Trillo.Canvas = Class.extend({
     var h = $( window ).height() - this.$canvasE.offset().top;
     var t, b, t2, b2; // t2 and b2 are top and bottom of viewable area
     var inview, pno;
-    t = t2 = $(document).scrollTop();
+    t = t2 = this.getScrollBarPos();
     b = b2 = t + h;
     t = t - h * 5;
     if (t < 0) t = 0;
@@ -1152,13 +1289,21 @@ Trillo.Canvas = Class.extend({
     }
     if(!this.isScrollListenerAdded) {
       this.isScrollListenerAdded = true;
-      $(window).bind("scroll", this.scrollListener);
+      if (this.nonNativeSB) {
+        this.parent.$_sb.bind("scroll", this.scrollListener);
+      } else {
+        $(window).bind("scroll", this.scrollListener);
+      }
     }
   },
   removeScrollListener : function() {
     if(this.isScrollListenerAdded) {
       this.isScrollListenerAdded = false;
-      $(window).unbind("scroll", this.scrollListener);
+      if (this.nonNativeSB) {
+        this.parent.$_sb.unbind("scroll", this.scrollListener);
+      } else {
+        $(window).unbind("scroll", this.scrollListener);
+      }
     }
   },
   doScrolling : function(ev) {
@@ -1170,10 +1315,10 @@ Trillo.Canvas = Class.extend({
     }
     this.clearActualScrollTimer();
     this.clearShowTimer();
-    var top = $(document).scrollTop();
+    var top = this.getScrollBarPos();
     var bottom = top + $( window ).height() - this.$canvasE.offset().top;
    
-    if (Trillo.isTouchSurface && (bottom < this.contentH)) {
+    if ((Trillo.isTouchSurface || this.nonNativeSB) && (bottom < this.contentH)) {
       this.actualScrollTimer = setTimeout(this.actualScrollHandler, 100);
     } else {
       this._doScrolling(); 
@@ -1182,7 +1327,7 @@ Trillo.Canvas = Class.extend({
   },
   updatePagination: function() {
     if (this.virtual) {
-      var top = $(document).scrollTop();
+      var top = this.getScrollBarPos();
       var bottom = top + $( window ).height() - this.$canvasE.offset().top;
       var l = this.infoBlocks;
       var n = l.length;
@@ -1221,13 +1366,30 @@ Trillo.Canvas = Class.extend({
     }
   },
   clicked : function(infoItem, ev) {
+    this.parent.hideOverlaidContainer();
+    var $e = $(ev.target);
+    if (Trillo.isActionElement($e)) {
+      if (this.selected !== infoItem) {
+        this.selectInfoItem(infoItem);
+      }
+      return this.parent.controller().handleClickGeneric($e);
+    }
+    
+    this.selectInfoItem(infoItem);
     if (!this.parent.clicked(infoItem, ev)) {
-      this.selectInfoItem(infoItem);
       return false;
     }
     return true;
   },
   dblClicked: function(infoItem, ev) {
+    this.parent.hideOverlaidContainer();
+    var $e = $(ev.target);
+    if (Trillo.isActionElement($e)) {
+      if (this.selected !== infoItem) {
+        this.selectInfoItem(infoItem);
+      }
+      return this.parent.controller().handleClickGeneric($e);
+    }
     if (!this.parent.infoItemDblClicked(infoItem, ev)) {
       this.selectInfoItem(infoItem);
       return false;
@@ -1268,6 +1430,10 @@ Trillo.Canvas = Class.extend({
     }
   },
   selectInfoItem : function(infoItem) {
+    if (!this.parent.canSelectionChange(infoItem.obj)) {
+      return;
+    }
+    this.parent.selectionChanging(infoItem.obj);
     if (this.selected === infoItem) {
       this.unselectInfoItem(infoItem);
       return;
@@ -1286,7 +1452,27 @@ Trillo.Canvas = Class.extend({
       this.selected = null;
     }
   },
+  selectItemByUid : function(uid) {
+    if (!uid) {
+      return null;
+    }
+    var obj = this.parent.model().getObj(uid);
+    if (obj && obj._trillo_infoBlock) {
+      var item = obj._trillo_infoBlock;
+      if (item !== this.selected) {
+        this.selectInfoItem(item);
+      }
+      return item;
+    }
+    return null;
+  },
   updateContainerGeom: function() {
+    var p = this.$canvasE.parent().css("position");
+    if (p === "absolute") {
+      this.$canvasE.parent().height(this.$canvasE.outerHeight());
+    }
+    /*
+    review old logic if it is needed
     if (this.$c.css("position") === "absolute") {
       if (this.$c.is(this.$canvasE.parent())) {
         // need a inner container for proper size and scroll behavior.
@@ -1303,6 +1489,7 @@ Trillo.Canvas = Class.extend({
       }
       this.$canvasE.parent().height(h);
     }
+    */
   },
   doSort: function(ev) {
     ev.stopPropagation();
@@ -1315,6 +1502,14 @@ Trillo.Canvas = Class.extend({
 });
 
 Trillo.Tree = Class.extend({
+  
+  // To do, remove it after all existing tree templates specify nodes within.
+  DEFAULT_NODE_TEMPLATE: 
+      '<div class="tree-node js-tree-node">' +
+        '<div class="trillo-tree-item js-tree-node-inner">' +
+          '<span nm="name"></span>' +
+        '</div>' +
+      '</div>',
 
   initialize : function(options) {
     this.name = 'TrilloTree';
@@ -1327,6 +1522,8 @@ Trillo.Tree = Class.extend({
     this.timer = null;
     this.$e = options.$e;
     this.$treeE = this.$e.find(".js-tree");
+    this.$treeNodes = [];
+    this.prepareNodeTemplates(this.$treeE, 0);
     this.lookupTable = {};
     this.clickHandler = $.proxy(this.linkClicked, this);
     this.contextMenuHandler = $.proxy(this.onContextMenu, this);
@@ -1336,11 +1533,33 @@ Trillo.Tree = Class.extend({
       this.delayedOnMouseOut = $.proxy(this._onMouseOut, this);
     }
   },
+  
   clear: function() {
     this.clearTimeout();
     this.removeEventHandlers();
-    
   },
+  
+  prepareNodeTemplates: function($c) {
+    var $node = $c.find(".js-tree-node");
+    if ($node.length === 0) {
+      if (this.$treeNodes.length === 0) {
+        $node = $(this.DEFAULT_NODE_TEMPLATE);
+      } else {
+        return;
+      }
+    } else {
+      $node = $($node[0]); // select first jquery
+      $node.remove();
+    }
+    this.$treeNodes.push($node);
+    this.prepareNodeTemplates($node);
+  },
+  
+  newNode: function(lvl) {
+    var n = lvl >= this.$treeNodes.length ? this.$treeNodes.length - 1 : lvl;
+    return this.$treeNodes[n].clone(true);
+  },
+  
   removeEventHandlers: function() {
     var $e = this.$e;
     $e.off("click", this.clickHandler);
@@ -1350,6 +1569,7 @@ Trillo.Tree = Class.extend({
       $e.off("mouseout", this.mouseOutHandler);
     }
   },
+  
   addHandlers : function() {
     var $e = this.$e;
     this.removeEventHandlers();
@@ -1360,23 +1580,28 @@ Trillo.Tree = Class.extend({
     $e.on("click", this.clickHandler);
     $e.on("contextmenu", this.contextMenuHandler);
   },
+  
   getSelectedItem: function() {
     return this.selectedItem;
   },
   getSelectedItemUid: function() {
     return this.selectedItem ? this.selectedItem.uid : null;
   },
+  
   setTreeData : function(l, action) {
     this.addHandlers();
-    this.lookupTable = {};
-    this.updateTree(l, 0, null, this.lookupTable);
+    if (!this.parent.model().__treeSetup) {
+      console.log("Setting tree");
+      this.parent.model().setupTreeData();
+    }
+    this.lookupTable = this.parent.model().table;
+    
     this.unselectCurrent();
     this.list = l;
     this.selectedItem = null;
     
-    this.$treeE.empty();
     this.resetElements(l);
-    
+    this.$treeE.empty();
     this.renderList(null, l, this.$treeE);
     if (this.alwaysOpen || action === Trillo.Options.OPEN_ALL) {
       this.openAll();
@@ -1386,15 +1611,11 @@ Trillo.Tree = Class.extend({
   },
   
   renderList : function(parent, l, ce, e2) {
-    ce.empty();
-    if (e2) {
-      ce.append(e2);
-    }
     for (var i = 0; i < l.length; i++) {
       var item = l[i];
-      var es = item[this.name];
+      var es = item._es_;
       if (!es) {
-        item[this.name] = es = this.renderElement(item);
+        item._es_ = es = this.renderElement(item);
       } else {
         es.e.data("uid", item.uid); // set new uid value, it may change for a navigation
         es.e.data("nm", item.uid); // used by handleClickGeneric
@@ -1404,54 +1625,46 @@ Trillo.Tree = Class.extend({
       }
       ce.append(es.e);
     }
+    this.parent.updateScrollBar();
   },
-
+  
   renderElement : function(item) {
     var lvl = item._lvl;
-    var e = $('<div></div>');
-    var cc = Trillo.CSS.treeNode + " " + Trillo.CSS.treeNodeLevelPrefix + lvl + (item.className ? " " + item.className : "");
-    var e2 = $('<div></div>');
-    var e3;
-    var e4 = null;
-    var label = item.displayName || item.name;
+    var e = this.newNode(lvl);
+    var temp = e.find(".js-lvl-" + lvl);
+    if (temp.length) {
+      e = temp;
+    }
+    e.addClass(Trillo.CSS.treeNodeLevelPrefix + lvl);
     e.data("uid", item.uid);
     e.data("nm", item.uid);
-    if (this.canShowTn && item.tnImage) {
-      item.isTn = true;
-      e3 = $('<img/>');
-      e3.attr("src", item.tnImage);
-      e2.addClass(Trillo.CSS.treeItemTn);
-      e4 = $('<div></div>');
-      e4.addClass(Trillo.CSS.tnLabel);
-      e4.html(label);
-      cc += ' no-border';
-    } else {
-      e3 = $('<span></span>');
-      e3.html(label);
-      e2.addClass(Trillo.CSS.treeItem + (this.canExpand(item, this) ? " " + Trillo.CSS.itemClose : ""));
+    
+    var e2 = e.find(".js-tree-node-inner");
+    
+    if (this.canExpand(item)) {
+      e2.addClass(Trillo.CSS.itemClose);
     }
-    e.addClass(cc);
-    e2.append(e3);
-    if (e4)
-      e2.append(e4);
-    if (item.userE) {
-      e3.append(item.userE);
-    }
-    e.append(e2);
-
+    this.setFieldsValues(e2, item);
     if (item.hideNode) {
       e.hide();
     }
     return {
-      e : e,
-      e2 : e2,
-      e3 : e3,
-      lvl : lvl
+      e : e, e2 : e2, lvl : lvl
     };
   },
   
+  setFieldsValues: function(e2, item) {
+    var el = e2.find("[nm]"), temp;
+    var n = el.length;
+    for (var i=0; i<n; i++) {
+      temp = $(el[i]);
+      Trillo.setFieldValue(temp, item[temp.dataOrAttr("nm")], false);
+    }
+  },
+ 
   refresh : function() {
     this._refresh(this.list);
+    this.parent.updateScrollBar();
   },
   
   _refresh : function(l) {
@@ -1460,14 +1673,9 @@ Trillo.Tree = Class.extend({
     }
     for (var i = 0; i < l.length; i++) {
       var item = l[i];
-      var es = item[this.name];
+      var es = item._es_;
       if (es) {
-        var label = item.displayName || item.name;
-        if (es.e4) {
-          es.e4.html(label);
-        } else {
-          es.e3.html(label);
-        }
+        this.setFieldsValues(es.e2, item);
         this._refresh(item.children);
       }
     }
@@ -1477,7 +1685,7 @@ Trillo.Tree = Class.extend({
     var item;
     for (var i = 0; i < l.length; i++) {
       item = l[i];
-      item[this.name] = null;
+      item._es_ = null;
       if (item.children) {
         this.resetElements(item.children);
       }
@@ -1485,11 +1693,12 @@ Trillo.Tree = Class.extend({
   },
 
   linkClicked : function(ev, showingContextMenu) {
-    if (!showingContextMenu) {
-      Trillo.contextMenuManager.hideCurrentContextMenu();
-    }
     var uid = $(ev.target).closest("." + Trillo.CSS.treeNode).dataOrAttr("uid");
     if (uid) {
+      if (!showingContextMenu) {
+        Trillo.hideCurrentOverlays(true, false);
+      }
+      this.parent.hideOverlaidContainer();
       var item = this.lookupTable[uid];
       if (showingContextMenu) {
         if (item === this.selectedItem) {
@@ -1499,12 +1708,16 @@ Trillo.Tree = Class.extend({
         ev.stopPropagation();
       }
       if (item._isAction && !showingContextMenu) {
-        this.parent.handleClickGeneric(item[this.name].e, item);
+        this.parent.handleClickGeneric(item._es_.e, item);
         return;
       }
-      var es = item[this.name];
+      if (!this.parent.canSelectionChange(item)) {
+        return;
+      }
+      this.parent.selectionChanging(item);
+      var es = item._es_;
       var open = true;
-      if (!this.alwaysOpen && this.canExpand(item, this)) {
+      if (!this.alwaysOpen && this.canExpand(item)) {
         var flag1 = item === this.selectedItem || es.e2[0] === ev.target;
         var flag2 = this.openOnFirstClick || flag1;
         if (!es.open) {
@@ -1530,13 +1743,14 @@ Trillo.Tree = Class.extend({
     var uid = $(ev.target).closest("." + Trillo.CSS.treeNode).dataOrAttr("uid");
     if (uid) {
       var item = this.lookupTable[uid];
-      var es = item[this.name];
+      var es = item._es_;
       var offset1 = es.e.offset();
       this.linkClicked(ev, true);
-      es = item[this.name];
       var offset2 = es.e.offset();
       if (this.parent.showContextMenu(ev.pageX + offset2.left - offset1.left,  ev.pageY + offset2.top - offset1.top)) {
         ev.preventDefault();
+      } else {
+        Trillo.hideCurrentOverlays(true, true);
       }
     }
   },
@@ -1545,12 +1759,12 @@ Trillo.Tree = Class.extend({
     if (!this.canExpand(item, this)) {
       return;
     }
-    var es = item[this.name];
+    var es = item._es_;
     if (es && es.open) {
       return;
     }
     if (!es) {
-      item[this.name] = es = this.renderElement(item);
+      item._es_ = es = this.renderElement(item);
     }
     es.open = true;
     this.renderList(item, item.children, es.e, es.e2);
@@ -1558,12 +1772,12 @@ Trillo.Tree = Class.extend({
   },
 
   closeItem : function(item) {
-    var es = item[this.name];
+    var es = item._es_;
     if (!es) {
       return;
     }
     es.open = false;
-    es.e.empty();
+    es.e.find(".js-tree-node").remove();
     if (this.canExpand(item, this)) {
       es.e2.removeClass(Trillo.CSS.itemOpen).addClass(Trillo.CSS.itemClose);
     }
@@ -1579,9 +1793,9 @@ Trillo.Tree = Class.extend({
     }
     for (var i = l.length - 1; i >= 0; i--) {
       item2 = l[i];
-      var es = item2[this.name];
+      var es = item2._es_;
       if (!es) {
-        item2[this.name] = es = this.renderElement(item2);
+        item2._es_ = es = this.renderElement(item2);
       }
       this.openItem(item2);
     }
@@ -1598,7 +1812,7 @@ Trillo.Tree = Class.extend({
         this.openItem2(item);
       }
       this.selectedItem = item;
-      es = item[this.name];
+      es = item._es_;
       es.e2.addClass(Trillo.CSS.selected);
       if (scrollInView) {
         this.scrollSelectedInView();
@@ -1618,7 +1832,7 @@ Trillo.Tree = Class.extend({
     var es;
     var res = this.selectedItem;
     if (res) {
-      es = res[this.name];
+      es = res._es_;
       es.e2.removeClass(Trillo.CSS.selected);
       this.selectedItem = null;
     }
@@ -1646,26 +1860,32 @@ Trillo.Tree = Class.extend({
       return;
     }
     var cTop, cBottom, eTop, saved, vh, reTop, reBottom;
-    var es = this.selectedItem[this.name];
+    var es = this.selectedItem._es_;
     var e = es.e;
     var el = this.$e;
     var pTop = el.offset().top;
     eTop = e.offset().top;
-    if (this.scrollPolicy === Trillo.Options.SCROLL_ON_HOVER || this.scrollPolicy === Trillo.Options.AUTO_SCROLL) {
+    if (this.scrollPolicy === Trillo.Options.SCROLL_ON_HOVER || this.scrollPolicy === Trillo.Options.AUTO_SCROLL || 
+        this.scrollPolicy === Trillo.Options.NON_NATIVE_SCROLLBAR) {
       vh = el.outerHeight();
       cTop = el.scrollTop();
       cBottom = cTop + vh;
       reTop = eTop - pTop + cTop;
       reBottom = reTop + e.outerHeight();
-      if (reTop > cTop && reBottom < cBottom) {
-        return; // in view
-      }
-      saved = el.css("overflow");
-      el.css("overflow", "auto");
-      cTop = reTop - parseInt((vh - es.e2.outerHeight()) / 2, 10);
-      el.scrollTop(cTop);
-      if (saved !== "auto") {
-        el.css("overflow", "hidden");
+      if (this.scrollPolicy === Trillo.Options.NON_NATIVE_SCROLLBAR) {
+        cTop = reTop - parseInt((vh - es.e2.outerHeight()) / 2, 10);
+        this.parent.setScrollBarPos(cTop);
+      } else {
+        if (reTop > cTop && reBottom < cBottom) {
+          return; // in view
+        }
+        saved = el.css("overflow");
+        el.css("overflow", "auto");
+        cTop = reTop - parseInt((vh - es.e2.outerHeight()) / 2, 10);
+        el.scrollTop(cTop);
+        if (saved !== "auto") {
+          el.css("overflow", "hidden");
+        }
       }
     } else if (this.scrollPolicy === Trillo.Options.SMOOTH_SCROLL) {
       cTop = document.viewport.getScrollOffsets().top;
@@ -1677,7 +1897,7 @@ Trillo.Tree = Class.extend({
       if ((tp !== this.selectedItem) && (reTop > cTop) && (reBottom < cBottom)) {
         return; // in view
       }
-      var e2 = tp[this.name].e;
+      var e2 = tp._es_.e;
       var eTop2 = e2.offset().top;
       if ((eTop - eTop2 + es.e2.outerHeight()) < vh) {
         cTop = eTop2 - pTop - cTop + parseInt(es.e.css("padding-top"), 10);
@@ -1693,6 +1913,7 @@ Trillo.Tree = Class.extend({
   },
   openAll : function() {
     this._openAll(this.list);
+    this.parent.updateScrollBar();
   },
   _openAll : function(l) {
     var item;
@@ -1707,6 +1928,7 @@ Trillo.Tree = Class.extend({
   },
   closeAll : function() {
     this._closeAll(this.list);
+    this.parent.updateScrollBar();
   },
   _closeAll : function(l) {
     var item;
@@ -1758,38 +1980,10 @@ Trillo.Tree = Class.extend({
     return item;
   },
   
-  canExpand : function(item, tree) {
+  canExpand : function(item) {
     if (!item)
       return true;
     return item.children && item.children.length > 0;
-  },
-  
-  updateTree: function(l, lvl, parent, lookupTable) {
-    var arr = [];
-    this._updateTree(l, lvl, parent, lookupTable, arr);
-    var prev = arr.length ? arr[0] : null;
-    for (var i=1; i<arr.length; i++) {
-      prev._next = arr[i];
-      arr[i]._prev = prev;
-      prev = arr[i];
-    }
-  },
-  
-  _updateTree: function(l, lvl, parent, lookupTable, arr) {
-    var n = l.length, item;
-    for (var i = 0; i < n; i++) {
-      item = l[i];
-      if (typeof item.uid === "undefined") {
-        item.uid = item.name;
-      }
-      arr.push(item);
-      lookupTable[item.uid] = item;
-      item._lvl = lvl;
-      item.parent = parent;
-      if (item.children) {
-        this._updateTree(item.children, lvl + 1, item, lookupTable, arr);
-      }
-    }
   },
   
   smoothVScroll : function(scrollLimit, dir) {
@@ -1814,7 +2008,6 @@ Trillo.Tree = Class.extend({
       smoothScroll();
     }
   }
-
 });
 
 
@@ -1826,6 +2019,9 @@ Trillo.TitleBar = Class.extend({
     this.$titleBarE = $(options.titleBar);
   },
   setTitle: function(viewName, title, titlePrefix) {
+    if (this.$titleBarE.length === 0) {
+      return;
+    }
     title = title || "";
     titlePrefix = titlePrefix || "";
     if (title.length === 0) {
@@ -1837,18 +2033,22 @@ Trillo.TitleBar = Class.extend({
     if (Trillo.HtmlTemplates.titleBarTitlePrefix && !Trillo.HtmlTemplates.titleBarTemplates__parsed__) {
       Mustache.parse(Trillo.HtmlTemplates.titleBarTitlePrefix);
       Mustache.parse(Trillo.HtmlTemplates.titleBarTitle);
+      Mustache.parse(Trillo.HtmlTemplates.titleBarTitlePrefix2);
+      Mustache.parse(Trillo.HtmlTemplates.titleBarTitle2);
       Trillo.HtmlTemplates.titleBarTemplates__parsed__ = true;
     }
     
     
     var $e;
     
+    var useOld = this.$titleBarE.prop("tagName").toLowerCase() === "ol";
+    
     $e = this.$titleBarE.find('[nm="' + viewName + '-title-prefix' + '"]');
     if (titlePrefix.length) {
       if ($e.length) {
         $e.html(titlePrefix);
       } else {
-        $e = this.$titleBarE.append(Mustache.render(Trillo.HtmlTemplates.titleBarTitlePrefix, 
+        $e = this.$titleBarE.append(Mustache.render(useOld ? Trillo.HtmlTemplates.titleBarTitlePrefix : Trillo.HtmlTemplates.titleBarTitlePrefix2, 
               {viewName: viewName, titlePrefix: titlePrefix})); 
       }
     } else {
@@ -1861,11 +2061,14 @@ Trillo.TitleBar = Class.extend({
     if ($e.length) {
       $e.html(title);
     } else {
-      $e = this.$titleBarE.append(Mustache.render(Trillo.HtmlTemplates.titleBarTitle, 
+      $e = this.$titleBarE.append(Mustache.render(useOld ? Trillo.HtmlTemplates.titleBarTitle : Trillo.HtmlTemplates.titleBarTitle2, 
           {viewName: viewName, title: title})); 
     }
   },
   clearTitle: function(viewName) {
+    if (this.$titleBarE.length === 0) {
+      return;
+    }
     this.$titleBarE.find('[nm="' + viewName + "-title-prefix" + '"]').remove();
     this.$titleBarE.find('[nm="' + viewName + "-title" + '"]').remove();
   }
@@ -1925,10 +2128,11 @@ Trillo.BaseView = Class.extend({
     this._embeddedViews = [];
     this._textNodes = []; // text nodes requiring mustache template processing
     this._attrNodes = []; // attribute nodes requiring mustache template processing
+    this.mediaMinWidth = -1;
     
     controller.setView(this);
     
-    if (viewSpec.embedded) {
+    if (viewSpec.embedded || viewSpec.autoLoad) {
       this._parentView = viewSpec.prevView;
       this._parentView._embeddedViews.push(this);
       this._parentView.controller().addEmbeddedController(controller);
@@ -1940,41 +2144,56 @@ Trillo.BaseView = Class.extend({
       }
     }
     var previewContainerWidth = 0;
-    var containerName = null;
     if (Trillo.isPreview) {
       viewSpec.container = viewSpec.container || "main-container";
-      containerName = viewSpec.container;
-      this.$c = $("[nm='" + containerName + "']");
+      this.$c = this._getContainer(this.viewSpec.container);
       if (this.$c) {
         this.$c.css("width", previewContainerWidth === 0 ? "auto" : previewContainerWidth);
       }
-      if (viewSpec.type === Trillo.ViewType.Chart) {
-        if (!viewSpec.charts && viewSpec.params.charts) {
-          viewSpec.charts = viewSpec.params.charts.split(",");
-        }
-      }
     } else {
-      containerName = viewSpec.container;
-      if (containerName) {
-        this.$c = $("[nm='" + containerName + "']");
+      if (viewSpec.container) {
+        this.$c = this._getContainer(this.viewSpec.container);
       } else {
         this.$c = ($e.parent().length > 0 ? $e.parent() : null);
       }
     }
     if (this.$c) {
       viewSpec.draggable = this.$c.hasClass("js-draggable");
-      viewSpec.dialog = viewSpec.dialog || this.$c.hasClass("js-dialog-container") || viewSpec.draggable;
+      viewSpec.dialog = viewSpec.dialog || this.$c.hasClass("js-dialog-container") || 
+        this.$c.hasClass("js-modal-dialog-container") || viewSpec.draggable;
+      this.isModal = viewSpec.dialog && this.$c.hasClass("js-modal-dialog-container");
       if (this.viewSpec.draggable) {
         this.dragHandleMouseDownM = $.proxy(this.mouseDownOnDragHandle, this);
         this.dragHandleMouseUpLeaveM = $.proxy(this.mouseUpLeaveDragHandle, this);
         this.dragHandleMouseMoveM = $.proxy(this.mouseMoveOnDragHandle, this);
       }
+      var temp = this.$c.dataOrAttr("media-min-width");
+      this.mediaMinWidth = temp ? parseFloat(temp) : -1;
     } 
+    
+   
     // before we process tools for this view, we need to construct embedded views that use 
     // the descendant of this.$e as the element so they can claim tools within their elements.
     this.createEmbeddedViews();
+    if (viewSpec.layoutSpecs) {
+      viewSpec.layoutSpecs = Trillo.makeDependencyList(viewSpec.layoutSpecs);
+    }
    
   }, 
+  
+  _getContainer: function(containerName) {
+    var p = this.parentView();
+    var $c;
+    if (p) {
+      $c = p.$e.find("[nm='" + containerName + "']");
+      if ($c.length) {
+        return $c;
+      }
+      return p._getContainer(containerName);
+    } else {
+      return $("[nm='" + containerName + "']");
+    }
+  },
  
   //creates only those embedded views which are created using one of the descendant element.
   createEmbeddedViews: function() {
@@ -1983,9 +2202,9 @@ Trillo.BaseView = Class.extend({
     if (embeddedSpecs && embeddedSpecs.length) {
       for (var i=0; i<embeddedSpecs.length; i++) {
         var espec = embeddedSpecs[i];
-        if (espec.elementSelector) {
-          console.debug("Creating embedded view: " + espec.name);
-          var $e2 = this.$e.find(espec.elementSelector);
+        var $e2 = this.getEmbeddedViewElem(espec);
+        if ($e2 && $e2.length > 0) {
+          debug.debug("Creating embedded view: " + espec.name);
           $e2.data("for-view", espec.name);
           Trillo.builder.createView($e2, espec, this);
         }
@@ -1993,47 +2212,70 @@ Trillo.BaseView = Class.extend({
     }
   },
   
-  init2: function() {
-    if (!this.viewSpec.hasTemplateTag) {
-      this.toolsMgr = new Trillo.ToolManager(this);
-      return;
+  getEmbeddedViewElem: function(espec) {
+    var $e2 = null;
+    if (espec.elementSelector) {
+      $e2 = this.$e.find(espec.elementSelector);
     }
-    var textNodes = this._textNodes;
-    var attrNodes = this._attrNodes;
-    function processNode(node) {
-      var t, i, len;
-      if (node.nodeType === 3) {
-        t = node.nodeValue;
-        if (t && t.indexOf("{{") >= 0) {
-          textNodes.push({textNode: node, text: t});
-        }
-      } else {
-        if (!node.hasAttribute) {
-          return;
-        }
-        var forView = node.getAttribute("for-view") || node.getAttribute("data-for-view");
-        if (forView && forView !== this.name) {
-          return;
-        }
-        var attributes = node.attributes;
-        if (attributes) {
-          var a;
-          for (i = 0, len = attributes.length; i < len; ++i) {
-            a = attributes[i];
-            t = a.nodeValue;
-            if (t && t.indexOf("{{") >= 0) {
-              attrNodes.push({attrNode: a, text: t});
-            }
+    if (!$e2) {
+      $e2 = this.$e.find('[nm="' + espec.name + '"]');
+    }
+    return $e2;
+  },
+  
+  init2: function() {
+    debug.debug("init2() " + this.name);
+    var html = this.$e.html();
+    var containsTemplateTags = html && html.indexOf("{{") >= 0;
+    if (containsTemplateTags && this.$e.length) {
+      this.processNode(this.$e[0], this._textNodes, this._attrNodes);
+    }
+   
+    this.toolsMgr = new Trillo.ToolManager(this);
+    var $mve = this.$e.find(".js-multi-view");
+    if ($mve.length) {
+      Trillo.multiViewDelegator.manage($mve, this);
+    }
+    this.$e.find("[data-trigger]").each(function() {
+      Trillo.popoverManager.createPopoverForContent($(this));
+    });
+    this.$e.find("[trigger]").each(function() {
+      Trillo.popoverManager.createPopoverForContent($(this));
+    });
+    this.applyExternalElements(Trillo.multiViewDelegator.getByTarget(this.name));
+  },
+  
+  processNode:  function(node, textNodes, attrNodes) {
+    var t, i, len;
+    if (node.nodeType === 3) {
+      t = node.nodeValue;
+      if (t && t.indexOf("{{") >= 0) {
+        textNodes.push({textNode: node, text: t});
+      }
+    } else {
+      if (!node.hasAttribute) {
+        return;
+      }
+      var forView = node.getAttribute("for-view") || node.getAttribute("data-for-view");
+      if (forView && forView !== this.name) {
+        return;
+      }
+      var attributes = node.attributes;
+      if (attributes) {
+        var a;
+        for (i = 0, len = attributes.length; i < len; ++i) {
+          a = attributes[i];
+          t = a.nodeValue;
+          if (t && t.indexOf("{{") >= 0) {
+            attrNodes.push({attrNode: a, text: t});
           }
         }
-        var cl = node.childNodes;
-        for (i = 0, len = cl.length; i < len; ++i) {
-          processNode(cl[i]);
-        }
+      }
+      var cl = node.childNodes;
+      for (i = 0, len = cl.length; i < len; ++i) {
+        this.processNode(cl[i], textNodes, attrNodes);
       }
     }
-    processNode(this.$e[0]);
-    this.toolsMgr = new Trillo.ToolManager(this);
   },
  
   $elem: function() {
@@ -2049,11 +2291,15 @@ Trillo.BaseView = Class.extend({
   },
  
   model: function() {
-    return this._model;
+    return this._controller.model();
+  },
+  
+  apiAdapter: function() {
+    return this._controller.apiAdapter();
   },
   
   modelData: function() {
-    return this._model.data;
+    return this._controller.modelData();
   },
   
   parentModelData: function() {
@@ -2077,13 +2323,28 @@ Trillo.BaseView = Class.extend({
     return this._nextView;
   },
   
-  show: function(modelSpec, forceModelRefresh) {
+  show: function(forceModelRefresh) {
     var myDeferred = $.Deferred();
-    if (forceModelRefresh || !this._model || this._model.isModelSpecChanged(modelSpec)) {
+    if (forceModelRefresh || this.controller().isModelDataChanged()) {
       debug.debug("View.show() - creating new model for: " + this.viewSpec.name);
+      var modelSpec = this.viewSpec.modelSpec;
+      if (this.updateModelSpec) {
+        // if view specifies updateModelSpec, give it precedence
+        this.updateModelSpec(modelSpec);
+      }
+      if (this.controller().updateModelSpec) {
+        this.controller().updateModelSpec(modelSpec);
+      }
       
-      var promise = this._controller.createModel(modelSpec);
-      promise.done($.proxy(Trillo.isPreview || Trillo.useTestData ? this.processTestData : this.showUsingModel, this, myDeferred));
+      var apiSpec = this.viewSpec.apiSpec;
+      if (apiSpec) {
+        if (this.controller().updateApiSpec) {
+          this.controller().updateApiSpec(apiSpec);
+        }
+      }
+      
+      var promise = this._controller.createModel(modelSpec, apiSpec);
+      promise.done($.proxy(this.showUsingModel, this, myDeferred));
       promise.fail(function(result) {
         myDeferred.reject(result);
       });
@@ -2094,24 +2355,14 @@ Trillo.BaseView = Class.extend({
     return myDeferred.promise();
   },
   
-  processTestData: function(myDeferred, model) {
-    this._model = model;
-    if (!$.isEmptyObject(model.data) && !model.data.isParameter) {
-      this.showUsingModel(myDeferred, model);
-    } else {
-      if (model.data.isParameter) {
-        model.modelSpec.params = model.data;
-      }
-      // nullify the model data so the data can be reloaded using service etc.
-      model.data = null;
-      var promise = model.loadData();
-      promise.done($.proxy(this.showUsingModel, this, myDeferred));
-    }
-  },  
+ 
+  showUsingModel: function(myDeferred) {
+    this.mapModelData(this.model());
+    this._showUsingModel(myDeferred);
+  },
   
-  showUsingModel: function(myDeferred, model) {
-    this._model = model;
-    this.mapModelData(model);
+  _showUsingModel: function(myDeferred) {
+    var model = this.model();
   
     if (!this.cleared) {
       this.render();
@@ -2121,52 +2372,84 @@ Trillo.BaseView = Class.extend({
     
     Trillo.router.showingView(this);
     
-    if (this.viewSpec.container && !this.viewSpec.isAppView) {
-      $("body").addClass(this.viewSpec.container + "-shown");
+    if (!this.viewSpec.isAppView && this.$c) {
+      this.$c.removeClass("trillo-cleared");
     }
     
-    if (this.$c && this.$e.parent().length === 0) {
-      this.$c.empty();
-      this.$c.append(this.$e);
+    this.setContainerVisibility();
+    
+    if (this.viewSpec.container && this.$c) {
+      var $t = $('[data-container-target="' + this.viewSpec.container + '"]');
+      if ($t.length) {
+        this.showHideContainerMethod = this.showHideContainer.bind(this);
+        $t.removeClass("hide");
+        $t.on("click", this.showHideContainerMethod);
+      }
+    }
+    
+    if (this.$c) {
+      if (this.$e.parent().length === 0) {
+        this.$c.empty();
+      }
+      if ((this.$e.parent()[0] !== this.$c[0]) || this.$e.parent().length === 0) {
+        this.$c.append(this.$e);
+      }
     } 
     
     if (this.viewSpec.dialog) {
       this.$c.removeClass("hide");
+      if (this.isModal) {
+        this.$backdropE = $('<div></div>').addClass('trillo-dialog-backdrop');
+        $('body').append(this.$backdropE);
+      }
     }
     
     this.$e.show();
     
     this.render();
     this.toolsMgr.activate();
+    this.setPopoverTriggerState(this.getToolBar$Elem(), false);
     this.cleared = false;
     this.postShow(myDeferred);
   },
   
   repeatShowUsingModel: function() {
     var myDeferred = $.Deferred();
-    this.showUsingModel(myDeferred, this._model);
+    this._showUsingModel(myDeferred);
     return myDeferred.promise();
   },
   
-  
   render: function() {
     var i;
-    if (this.viewSpec.hasTemplateTag) {
-      var textNodes = this._textNodes;
-      var attrNodes = this._attrNodes;
-      var temp;
-      for (i=0; i< textNodes.length; i++) {
-        temp = textNodes[i];
-        temp.textNode.nodeValue = Mustache.render(temp.text, this.modelData());
-      }
-      for (i=0; i< attrNodes.length; i++) {
-        temp = attrNodes[i];
-        temp.attrNode.nodeValue = Mustache.render(temp.text, this.modelData());
-      }
-    }
+    this.renderTemplateNode(this._textNodes, this._attrNodes);
     var $el = this.$e.find("select");
     for (i=0; i<$el.length; i++) {
       Trillo.setSelectOptionsFromEnum($($el[i]));
+    }
+    this.renderExterns();
+  },
+  
+  renderTemplateNode: function(textNodes, attrNodes) {
+    var i;
+    var nodeValue;
+    if (textNodes.length || attrNodes.length) {
+      var temp;
+      for (i=0; i< textNodes.length; i++) {
+        temp = textNodes[i];
+        nodeValue = Mustache.render(temp.text, this.modelData());
+        if (!nodeValue) {
+          nodeValue = Mustache.render(temp.text, Trillo.appContext);
+        }
+        temp.textNode.nodeValue = nodeValue;
+      }
+      for (i=0; i< attrNodes.length; i++) {
+        temp = attrNodes[i];
+        nodeValue = Mustache.render(temp.text, this.modelData());
+        if (!nodeValue) {
+          nodeValue = Mustache.render(temp.text, Trillo.appContext);
+        }
+        temp.attrNode.nodeValue = nodeValue;
+      }
     }
   },
   
@@ -2178,6 +2461,7 @@ Trillo.BaseView = Class.extend({
     this._controller.postViewShown(this);
     myDeferred.resolve(this);
     if (this.viewSpec.dialog && !this.viewSpec.draggable && this.$c.css("position") === "absolute") {
+      this.updateDialogSize();
       this.centerIt();
     }
     if (this.viewSpec.draggable) {
@@ -2186,6 +2470,18 @@ Trillo.BaseView = Class.extend({
         $h.off("mousedown", this.dragHandleMouseDownM);
         $h.on("mousedown", this.dragHandleMouseDownM);
       }
+    }
+    if (this.$c) {
+      Trillo.popoverManager.contentShown(this.$c);
+    }
+    this.layoutContainers();
+    Trillo.page.layoutContainers2();
+    if (this.$c && this.$c.hasClass("js-non-native-scrollbar")) {
+      var self = this;
+      setTimeout(function() {
+        var options = {minScrollbarLength: 100};
+        options.suppressScrollX = self.$c.width() > self.$e.width();
+        self.setNonNativeScrollBar(self.$c, options);}, 0);
     }
   },
   
@@ -2204,10 +2500,10 @@ Trillo.BaseView = Class.extend({
       if (!this.viewSpec.embedded) {
         Trillo.router.markForClearing(this);
       }
-      if (this._model) {
+      if (this.model()) {
         // clear observer so this view does not receive any events from back-end
         // while it is being cleared and new set of views are being initialized.
-        this._model.clearObserver();
+        this.model().clearObserver();
       }
     }
     if (this._nextView) {
@@ -2225,10 +2521,10 @@ Trillo.BaseView = Class.extend({
     }
     
     this.toolsMgr.clear();
+    this.destroyScrollBar();
     
-    if (this._model) {
-      this._model.clear();
-      this._model = null;
+    if (this.model()) {
+      this.model().clear();
     }
     
     if (this.viewSpec.draggable && this.dragHandleMouseDownM) {
@@ -2238,10 +2534,25 @@ Trillo.BaseView = Class.extend({
       $h.off("mousemove", this.dragHandleMouseMoveM);
     }
   
+    if (this.$c) {
+      this.$c.addClass("trillo-cleared");
+      Trillo.popoverManager.contentCleared(this.$c);
+    }
+    if (this.$backdropE) {
+      this.$backdropE.remove();
+      this.$backdropE = null;
+    }
     if (this.viewSpec.container) {
       $("body").removeClass(this.viewSpec.container + "-shown");
+      if (this.$c) {
+        var $t = $('[data-container-target="' + this.viewSpec.container + '"]');
+        if ($t.length) {
+          $t.addClass("hide");
+          $t.off("click", this.showHideContainerMethod);
+        }
+      }
     }
-    
+ 
     if (!this.$e.hasClass("js-on-clean-no-remove")) {
       this.$e.remove(); 
     }
@@ -2258,11 +2569,35 @@ Trillo.BaseView = Class.extend({
       }
     } else if (this._parentView) {
       this._parentView.embeddedViews().splice(this._parentView.embeddedViews().indexOf(this), 1);
+      this._parentView._controller.removeEmbeddedController(this._controller);
     }
     for (var i=0; i<this._embeddedViews.length; i++) {
       this._embeddedViews[i].clear();
     }
     this.cleared = true;
+  },
+  
+  canSelectionChange: function(newObjOrName) {
+    var f = this._controller.canSelectionChange();
+    // give children views a chance to veto it
+    if (f && this._nextView) {
+      f = this._nextView.canSelectionChange(newObjOrName);
+    }
+    for (var i=0; i<this._embeddedViews.length && f; i++) {
+     f = this._embeddedViews[i].canSelectionChange(newObjOrName);
+    }
+    return f;
+  },
+  
+  selectionChanging: function(newObjOrName) {
+    this._controller.selectionChanging();
+    // let children also know
+    if (this._nextView) {
+      this._nextView.selectionChanging(newObjOrName);
+    }
+    for (var i=0; i<this._embeddedViews.length; i++) {
+      this._embeddedViews[i].selectionChanging(newObjOrName);
+    }
   },
   
   getSelectedObj: function() {
@@ -2274,6 +2609,9 @@ Trillo.BaseView = Class.extend({
     this._controller.selectedObjChanged(obj);
     this._controller.updateTitle();
     this.setTbState();
+  },
+  
+  selectAndRoute: function(uid) {
   },
   
   getToolBar$Elem: function() {
@@ -2291,17 +2629,23 @@ Trillo.BaseView = Class.extend({
   
   setTbState: function() {
     this.toolsMgr.setTbState(this.selectedObj);
+    this.setPopoverTriggerState(this.getToolBar$Elem(), false);
+  },
+  
+  setPopoverTriggerState: function($tce, popoverToolsVisible) {
+    var f = this.toolsMgr.setPopoverTriggerState($tce, popoverToolsVisible);
+    popoverToolsVisible = f || popoverToolsVisible;
+    var p = this.parentView();
+    if (p) {
+      p.setPopoverTriggerState($tce, popoverToolsVisible);
+    }
   },
   
   showContextMenu: function(x, y) {
     return this.toolsMgr.showContextMenu(x, y);
   },
   
-  getNextViewName: function(historySpec, parentPath) {
-    return null;
-  },
-  
-  getNextViewSpec: function(name) {
+  getNextViewName: function(parentPath) {
     return null;
   },
  
@@ -2332,7 +2676,7 @@ Trillo.BaseView = Class.extend({
   },
   
   modelDataChanged: function(model) {
-    if (model === this._model) {
+    if (model === this.model()) {
       this.repeatShowUsingModel();
     }
   },
@@ -2356,16 +2700,7 @@ Trillo.BaseView = Class.extend({
       this._embeddedViews[i].refresh();
     }
   },
-  
-  setEditable: function(f) {
-    if (this._nextView) {
-      return this._nextView.setEditable(f);
-    }
-    for (var i=0; i<this._embeddedViews.length; i++) {
-      this._embeddedViews[i].setEditable(f);
-    }
-  },
-  
+ 
   windowResized : function() {
     if (this.cleared) {
       return;
@@ -2373,11 +2708,39 @@ Trillo.BaseView = Class.extend({
     if (this.viewSpec.dialog && !this.viewSpec.draggable && this.$c.css("position") !== "fixed") {
       this.centerIt();
     }
+    if (this.mediaMinWidth !== -1) {
+      this.setContainerVisibility();
+    }
     if (this._nextView) {
       this._nextView.windowResized();
     }
     for (var i=0; i<this._embeddedViews.length; i++) {
       this._embeddedViews[i].windowResized();
+    }
+    if (this.viewSpec.layoutSpecs) {
+      Trillo.positionContainers(this.viewSpec.layoutSpecs);
+    }
+    this.updateScrollBar();
+  },
+  
+  updateDialogSize: function() {
+    var $e=this.$e, $c=this.$c;
+    if ($c) {
+      var eWidth = $e.dataOrAttr("width");
+      if (!eWidth) {
+        eWidth = "auto";
+      }
+      var eHeight = $e.dataOrAttr("height");
+      if (!eHeight) {
+        eHeight = "auto";
+      }
+      
+      var maxWidth = $e.dataOrAttr("max-width");
+      if (!maxWidth) {
+        maxWidth = Trillo.Options.DIALOG_MAX_WIDTH;
+      }
+      
+      $c.css({width: eWidth, height: eHeight, maxWidth: maxWidth});
     }
   },
   
@@ -2385,9 +2748,13 @@ Trillo.BaseView = Class.extend({
     var $w=$(window), $c=this.$c;
     if ($c) {
       var pWidth = $w.width();
+      var pHeight = $w.height();
       var pTop = $w.scrollTop();
-      var eWidth = $c.width();
-      $c.css('top', pTop + 100 + 'px');
+      var eWidth = $c.outerWidth();
+      var eHeight = $c.outerHeight();
+      var top = parseInt((pHeight / 2) - (eHeight / 2), 10);
+      if (top > 100) top = 100; else if (top < 10) top = 10;
+      $c.css('top', pTop + top + 'px');
       $c.css('left', parseInt((pWidth / 2) - (eWidth / 2), 10) + 'px');
     }
   },
@@ -2450,9 +2817,166 @@ Trillo.BaseView = Class.extend({
   
   hidePageLoadIndicator: function() {
     $(".js-page-load-indicator").addClass("hide");
-  }
+  },
   
- 
+  setContainerVisibility: function() {
+    if (this.mediaMinWidth !== -1) {
+      if (this.$c && this.canContainerBeShown()) {
+        this.$c.removeClass("js-overlaid");
+        this.$c.removeClass("trillo-container-overlaid");
+        this.$c.removeClass("hide");
+      } else {
+        this.$c.addClass("js-overlaid");
+        this.$c.addClass("trillo-container-overlaid");
+        this.$c.addClass("hide");
+      }
+    }
+    if (this.viewSpec.container && !this.viewSpec.isAppView) {
+      var clsName = this.viewSpec.container + "-shown";
+      if (this.canContainerBeShown()) {
+        $("body").addClass(clsName);
+      } else {
+        $("body").removeClass(clsName);
+      }
+    }
+  },
+  
+  canContainerBeShown: function() {
+    return (this.mediaMinWidth === -1 || this.getViewportWidth() > this.mediaMinWidth);
+  },
+  
+  getViewportWidth: function() {
+    return Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+  },
+  
+  getViewportHeight: function() {
+    return Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+  },
+  
+  hideOverlaidContainer: function() {
+    if (this.$c) {
+      if (!this.canContainerBeShown()) {
+        this.$c.addClass("hide");
+      }
+      Trillo.popoverManager.hideCurrentPopupIfContains(this.$c);
+    }
+  },
+  
+  showHideContainer: function(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    this.$c.toggleClass("hide");
+    if (this.$c.is(':visible')) {
+      this.repeatShowUsingModel();
+    }
+  },
+  
+  layoutContainers: function() {
+    if (this.viewSpec.layoutSpecs) {
+      Trillo.positionContainers(this.viewSpec.layoutSpecs);
+    } else {
+      var p = this.parentView();
+      if (p) {
+        p.layoutContainers();
+      }
+    }
+  },
+  
+  layoutContainers2: function() {
+    if (this._nextView) {
+      this._nextView.layoutContainers2();
+    }
+    for (var i=0; i<this._embeddedViews.length; i++) {
+      this._embeddedViews[i].layoutContainers2();
+    }
+  },
+  
+  setNonNativeScrollBar: function($sb, options) {
+    this.destroyScrollBar();
+    options = options || {suppressScrollX: true, minScrollbarLength: 100};
+    this.$_sb = $sb;
+    $sb.perfectScrollbar(options);
+  },
+  
+  updateScrollBar: function() {
+    if (this.$_sb) {
+      this.$_sb.perfectScrollbar("update");
+    }
+  },
+  
+  destroyScrollBar: function() {
+    if (this.$_sb) {
+      this.$_sb.perfectScrollbar("destroy");
+    }
+  },
+  
+  setScrollBarPos: function(value, dir) {
+    if (this.$_sb) {
+      if (dir == "left") {
+        this.$_sb.scrollLeft(value);
+      } else {
+        this.$_sb.scrollTop(value);
+      }
+      this.updateScrollBar();
+    }
+  },
+  
+  getScrollBarPos: function(dir) {
+    if (this.$_sb) {
+      if (dir == "left") {
+        return this.$_sb.scrollLeft();
+      } else {
+        return this.$_sb.scrollTop();
+      }
+    }
+    return -1;
+  },
+  
+  applyExternalElements: function(el) {
+    var item;
+    this._externs = el;
+    if (el) {
+      for (var i=0; i<el.length; i++) {
+        item = el[i];
+        item._textNodes = [];
+        item._attrNodes = [];
+        this.processNode(item.e, item._textNodes, item._attrNodes);
+      }
+      if (!this.cleared) {
+        this.renderExterns();
+      }
+    }
+  },
+  
+  renderExterns: function() {
+    var el = this._externs;
+    var item;
+    if (!el) {
+      return;
+    }
+    for (var i=0; i<el.length; i++) {
+      item = el[i];
+      this.renderTemplateNode(item._textNodes, item._attrNodes);
+    }
+  },
+  
+  getExternBySelector: function(selector) {
+    var el = this._externs;
+    var $temp, item;
+    if (!el) {
+      return null;
+    }
+    for (var i=0; i<el.length; i++) {
+      item = el[i];
+      $temp = Trillo.findAndSelf($(item.e), selector);
+      if ($temp.length) {
+        return $temp;
+      }
+    }
+    return null;
+  }
 });
 
 /* globals Mustache */
@@ -2609,49 +3133,39 @@ Trillo.View = Trillo.BaseView.extend({
     
   },
   
-  getNextViewName: function(historySpec, parentPath) {
+  getNextViewName: function(parentPath) {
     if (this._nextView && (!parentPath || (parentPath === this._nextView.viewSpec.parentPath))) {
       return this._nextView.viewSpec.getMyPath();
     }
     if (parentPath) {
+      var str = Trillo.navHistory.get(parentPath);
+      if (str) {
+        return str;
+      }
       var spec = this.viewSpec.getViewSpecByParentPath(parentPath);
       if (spec) {
         return spec.getMyPath();
       }
     }
-    if (historySpec) {
+    /* if (historySpec) {
       var type = this.viewSpec.type;
-      if (type === Trillo.ViewType.Tab || type === Trillo.ViewType.Nav || Trillo.ViewType.Selector) {
+      if (Trillo.isSelectionView(type)) {
         return this.viewSpec.getNextPath(historySpec.name);
       }
-    }
+    } */
     if (this.viewSpec.nextView) {
       return this.viewSpec.getDefaultNextPath();
     } else {
-      return this._getNextViewName(historySpec);
+      return this._getNextViewName();
     }
   },
   
-  _getNextViewName: function(historySpec) {
+  _getNextViewName: function() {
     var viewSpec = this.getNextViewSpecByContextUidClass();
     if (viewSpec) {
       return viewSpec.name;
     } 
     return null;
-  },
-  
-  getNextViewSpec: function(name) {
-    var specs = this.viewSpec.nextViewSpecs;
-    var res = null;
-    if (specs) {
-      $.each(specs, function( key, spec ) {
-        if (spec.name === name) {
-          res = spec;
-          return false;
-        }
-      });
-    }
-    return res;
   },
   
   getNextViewSpecByContextUidClass: function() {
@@ -2689,7 +3203,7 @@ Trillo.View = Trillo.BaseView.extend({
   routingToNextView: function(routeSpecArr, indexOfNextView) {
     // Since the routing state of this view is dependent on the path (not just the next view),
     // we iterate over the routeSpecAtt until the routing state of this view is set appropriately.
-    // Rememeber that the name of a route can be a path which is a list of names separated by "/" (subroute).
+    // Remember that the name of a route can be a path which is a list of names separated by "/" (sub-route).
     var n = routeSpecArr.length;
     var path = "";
     for (var i=indexOfNextView; i<n; i++) {
@@ -2702,40 +3216,92 @@ Trillo.View = Trillo.BaseView.extend({
   },
   
   synchWithRouteState: function(path) {
-    // trivially satisfied.
+    // An embedded views state may have to be updated based on next path.
+    // For example, if a navigation is embedded into another view and 
+    // pointing to external views. If next path matches with one of the
+    // views pointed by it, then navigation item is shown as selected.
+    for (var i=0; i<this._embeddedViews.length; i++) {
+      this._embeddedViews[i].synchWithRouteState(path);
+    }
     return true;
   },
   
   // view selection related method, mixin for NavView and TabView
   viewSelected: function(ev) {
-    Trillo.contextMenuManager.hideCurrentContextMenu();
+    Trillo.hideCurrentOverlays(true, false);
+    var $e = Trillo.getActualTarget(ev);
+    if ($e) {
+      Trillo.popoverManager.hideCurrentPopupIfContains($e);
+      var tag = $e.prop("tagName").toLowerCase();
+      if (tag === "a") {
+        var href = $e.attr("href");
+        if (href && href !== "#") {
+          return;
+        }
+      }
+    }
     if (ev) {
       //ev.stopPropagation();
       ev.preventDefault();
     }
     var $e2 = $(ev.target).closest(this.itemCss);
     var newName = $e2.dataOrAttr("nm");
+    if (!this.canSelectionChange(newName)) {
+      return;
+    }
+    this.selectionChanging(newName);
     if (this.updateItemSelection(newName)) {
       this.postViewSelected(newName);
     }
+    $(".js-navbar-toggle").each(function () {
+      $($(this).data("target")).removeClass("in").addClass('collapse');
+    });
   },
   
   updateItemSelection: function(name) {
+    $(':focus').blur();
     var $e = this.$e;
     var $e2 = $e.find(this.itemCss + "[selected]");
+    var f = false;
     if ($e2.dataOrAttr("nm") !== name) {
       $e2.removeClass(Trillo.CSS.selected);
       $e2.removeAttr("selected");
       $e2 = $e.find("[nm='" + name + "']");
       $e2.addClass(Trillo.CSS.selected);
       $e2.attr("selected", "selected");
-      return true;
+      f = true;
     }
-    return false;
+    $e2 = this.getExternBySelector("[selected]");
+    if ($e2 === null || $e2.dataOrAttr("nm") !== name) {
+      if ($e2) {
+        $e2.removeClass(Trillo.CSS.selected);
+        $e2.removeAttr("selected");
+      }
+      $e2 = this.getExternBySelector("[nm='" + name + "']");
+      if ($e2) {
+        $e2.addClass(Trillo.CSS.selected);
+        $e2.attr("selected", "selected");
+      }
+      f = true;
+    }
+    return f;
+  },
+  
+  getSelected$Elem: function() {
+    return this.$e.find(this.itemCss + "[selected]");
+  },
+  
+  getSelectedItem: function() {
+    var $e2 = this.$e.find(this.itemCss + "[selected]");
+    return $e2.length ? $e2.dataOrAttr("nm") : null;
+  },
+  
+  selectedItemChanged: function(newObjOrName) {
+    this._controller.selectedItemChanged(newObjOrName);
   },
   
   postViewSelected: function(newName) {
-    this._controller.viewSelected(this.viewSpec.getNextPath(newName));
+    this._controller.routeToSelectedView(this.viewSpec.getNextPath(newName));
   },
   
   updateLabel: function() {
@@ -2792,7 +3358,7 @@ Trillo.EditableView = Trillo.View.extend({
       if (value === null) {
         value = "";
       }
-      $e.html(value);
+      Trillo.setReadonlyFieldValue($e, value);
     });
   },
   
@@ -2836,7 +3402,19 @@ Trillo.EditableView = Trillo.View.extend({
     if(!$e.is(':visible')) {
       return true;
     }
-    return this._validateOne($e);
+    var f = this._validateOne($e);
+    if (f && this.controller().validateOne) {
+      f = this.controller().validateOne($e);
+    }
+    if (f && this.controller().validateAndGetMsg) {
+      var msg = this.controller().validateAndGetMsg($e);
+      if (msg) {
+        this.inlineError($e, msg);
+        $e.parent().addClass(Trillo.CSS.hasErrorCss);
+        f = false;
+      }
+    }
+    return f;
   },
   _validate : function(el) {
     var f = true;
@@ -2927,24 +3505,13 @@ Trillo.EditableView = Trillo.View.extend({
       }
     }
   },
+  
   getInputs: function() {
     return Trillo.getInputs(this.$e);
   },
+  
   getReadonlyFields: function() {
     return Trillo.getReadonlyFields(this.$e);
-  },
-  setEditable: function(f) {
-    if (f !== this.editable) {
-      this.editable = f;
-      this.renderData(this.modelData());
-    }
-    this._super();
-  },
-  setFieldEditable: function(name, f) {
-    var $e = this.$e.find('[nm="' + name + '"]');
-    if ($e.length) {
-      Trillo.setFieldValue($e, Trillo.getFieldValue($e), !f);
-    }
   },
   
   postShow: function(myDeferred) {
@@ -2953,6 +3520,7 @@ Trillo.EditableView = Trillo.View.extend({
       autosize($tal);
       autosize.update($tal);
     }
+    $(".js-default-focus", this.$e).focus();
     this._super(myDeferred);
   },
   
@@ -2964,6 +3532,14 @@ Trillo.EditableView = Trillo.View.extend({
       }
     }
     this._super();
+  },
+  
+  setAllInputsDisabled: function(f) {
+    Trillo.setDisabled(this.getInputs(), f);
+  },
+  
+  setInputDisabled: function(name, f) {
+    Trillo.setDisabled(this.$e.find('[nm="' + name + '"]'), f);
   }
 });
 
@@ -3074,26 +3650,42 @@ Trillo.ViewSelectionView = Trillo.View.extend({
     return false;
   },
   
-  _getNextViewName: function(historySpec) {
-    if (historySpec) {
-      
-    }
+  _getNextViewName: function() {
     var $e2 = this.$e.find(this.itemCss + "[selected]");
     if ($e2.length > 0) {
       return $e2.dataOrAttr("nm");
     }
     return null;
+  },
+  
+  applyExternalElements: function(el) {
+    this._super(el);
+    if (!el) {
+      return;
+    }
+    var $temp, item;
+    for (var i=0; i<el.length; i++) {
+      item = el[i];
+      $temp = Trillo.findAndSelf($(item.e), this.itemCss);
+      $temp.off("click", this.viewSelectedMethod);
+      $temp.on("click", this.viewSelectedMethod);
+    }
   }
 });
 
 Trillo.TreeView = Trillo.View.extend({
   initialize : function($e, controller, viewSpec) {
     this._super($e, controller, viewSpec);
-    var $treeC = this.$e.find(".js-scrollbar");
+    var $treeC = this.$e.find(".js-tree-container");
+    var $sb = Trillo.findAndSelf(this.$e, ".js-non-native-scrollbar");
+    if ($sb.length) {
+      this.setNonNativeScrollBar($sb);
+    }
     this.tree = new Trillo.Tree({
       $e : $treeC,
       parent : this,
-      scrollPolicy: Trillo.isTouchSurface ? Trillo.Options.AUTO_SCROLL : Trillo.Options.SCROLL_ON_HOVER,
+      scrollPolicy: $sb.length ? Trillo.Options.NON_NATIVE_SCROLLBAR : 
+          (Trillo.isTouchSurface ? Trillo.Options.AUTO_SCROLL : Trillo.Options.SCROLL_ON_HOVER),
       openOnFirstClick: true,
       closeOthers: true
     });
@@ -3125,7 +3717,7 @@ Trillo.TreeView = Trillo.View.extend({
   },
   
   postShow: function(myDeferred) {
-    this.selectTreeItem(this.controller().getMySelection());
+    this.selectTreeItem(this.controller().getParam("sel"));
     this._super(myDeferred);
   },
   
@@ -3191,12 +3783,12 @@ Trillo.TreeView = Trillo.View.extend({
     this.$container().css("left", "0px");
   },
   
-  getNextViewName: function(historySpec, parentPath) {
+  getNextViewName: function(parentPath) {
     var item = this.selectedObj; 
     if (item) {
       return Trillo.isUid(item.uid) ? this.getNextViewSpecNameByUidClass(item.uid) : this.viewSpec.getNextPath(item.uid);
     }
-    return this._super(historySpec, parentPath);
+    return this._super(parentPath);
   },
   
   refresh: function() {
@@ -3210,7 +3802,7 @@ Trillo.NavTreeView = Trillo.TreeView.extend({
     this._super($e, controller, viewSpec);
   },
   
-  updateModel: function(modelSpec, params) {
+  updateModelSpec: function(modelSpec) {
     modelSpec.data = {
         children: this.viewSpec.nextViewSpecs || []
     };
@@ -3254,10 +3846,19 @@ Trillo.TabView = Trillo.EditableObjView.extend ({
   },
   
   postShow: function(myDeferred) {
-    var $e2 = this.$e.find(this.itemCss + "[selected]");
+    var $e2, $tp;
+    var name = null, nameFromHistory = Trillo.navHistory.get("tab://" + this.controller().getRouteUpTo(false));
+    
+    $e2 = this.$e.find(this.itemCss + "[selected]");
     if ($e2.length > 0) {
-      var name = $e2.dataOrAttr("nm");
-      var $tp = this.$e.find(this.tabPanelCSS + "[for='" + name +"']");
+      name = $e2.dataOrAttr("nm");
+    }
+    if (nameFromHistory && nameFromHistory !== name) {
+      name = nameFromHistory;
+      this.synchWithRouteState(name);
+    }
+    if (name) {
+      $tp = this.$e.find(this.tabPanelCSS + "[for='" + name +"']");
       if ($tp.length > 0) {
         this.updateTabPanelVisibility(name);
       }
@@ -3265,6 +3866,7 @@ Trillo.TabView = Trillo.EditableObjView.extend ({
     var $temp = this.$e.find(this.itemCss);
     $temp.off("click", this.viewSelectedMethod);
     $temp.on("click", this.viewSelectedMethod);
+    this.makeResponsive();
     this._super(myDeferred);
   },
   
@@ -3297,16 +3899,26 @@ Trillo.TabView = Trillo.EditableObjView.extend ({
     if ($tp.length > 0) {
       this.updateTabPanelVisibility(newName);
       this.updateLabel();
+      this.selectedItemChanged(newName);
+      Trillo.navHistory.add("tab://" + this.controller().getRouteUpTo(false), newName);
     } else {
       this._super(newName);
     }
   },
   
-  _getNextViewName: function(historySpec) {
-    var $e2 = this.$e.find(this.itemCss + "[selected]");
+  _getNextViewName: function() {
+    var $e2, $tp;
+    var nextName = Trillo.navHistory.get("tab://" + this.controller().getRouteUpTo(false));
+    if (nextName) {
+      $tp = this.$e.find(this.tabPanelCSS + "[for='" + nextName +"']");
+      if ($tp.length > 0) {
+        //return null;
+      } 
+    }
+    $e2 = this.$e.find(this.itemCss + "[selected]");
     if ($e2.length > 0) {
-      var nextName = $e2.dataOrAttr("nm");
-      var $tp = this.$e.find(this.tabPanelCSS + "[for='" + nextName +"']");
+      nextName = $e2.dataOrAttr("nm");
+      $tp = this.$e.find(this.tabPanelCSS + "[for='" + nextName +"']");
       if ($tp.length > 0) {
         return null;
       } else { 
@@ -3334,6 +3946,48 @@ Trillo.TabView = Trillo.EditableObjView.extend ({
     if (obj === this.modelData()) {
       this.setTbState();
     }
+  },
+  
+  makeResponsive: function() {
+    var $e = this.$e;
+    var $tabs = $e.find("li");
+    var n = 0;
+    var $e2;
+    $.each($tabs, function() {
+      if ($(this).is(':visible')) {
+        n++;
+      }
+    });
+    if (n > 0) {
+      $tabs.css("width", (100 / n) + "%");
+    }
+    
+    $.each($tabs, function() {
+      $e2 = $(this);
+      if (!$e2.attr("title")) {
+        $e2.attr("title", $.trim($e2.text()));
+      }
+    });
+  },
+  
+  showHideTab: function(name, showing) {
+    var $e2 = this.$e.find("[nm='" + name + "']");
+    if ($e2.length > 0) {
+      if (showing) {
+        $e2.parent().removeClass("hide");
+      } else {
+        $e2.parent().addClass("hide");
+      }
+      this.makeResponsive();
+    }
+  },
+  
+  showTab: function(name) {
+    this.showHideTab(name, true);
+  },
+
+  hideTab: function(name) {
+    this.showHideTab(name, false);
   }
 });
 
@@ -3344,6 +3998,10 @@ Trillo.NavView = Trillo.ViewSelectionView.extend({
   
   initialize : function($e, controller, viewSpec) {
     this._super($e, controller, viewSpec);
+  },
+  
+  init2: function() {
+    this._super();
   }
 });
 
@@ -3359,15 +4017,16 @@ Trillo.CollectionView = Trillo.View.extend({
    var options = {};
    var viewSpec = this.viewSpec;
    var $e = this.$e;
+  
    var $e2 = $e.find('.js-grid-cell');
    if ($e2.length > 0) {
      options.elemKey = viewSpec.name + "-" + "info-block";
-     Trillo.infoElementRepo.addTemplate($e2, options.elemKey, viewSpec.hasTemplateTag);
+     Trillo.infoElementRepo.addTemplate($e2, options.elemKey);
    } else {
      $e2 = $e.find('.js-content-row');
      if ($e2.length > 0) {
        options.elemKey = viewSpec.name + "-" + "row";
-       Trillo.infoElementRepo.addTemplate($e2, options.elemKey, viewSpec.hasTemplateTag);
+       Trillo.infoElementRepo.addTemplate($e2, options.elemKey);
        options.isListViewMode = true;
      } 
    }
@@ -3381,6 +4040,9 @@ Trillo.CollectionView = Trillo.View.extend({
    options.virtual = viewSpec.virtual || typeof viewSpec.virtual === "undefined" ? true : false;
    this.$asc = $(Trillo.sortAscTemplate);
    this.$desc = $(Trillo.sortDescTemplate);
+   if (this.$e.hasClass("js-non-native-scrollbar")) {
+     this.setNonNativeScrollBar(this.$e);
+   }
    this.canvas = new Trillo.Canvas(this, options);
   },
   
@@ -3389,14 +4051,14 @@ Trillo.CollectionView = Trillo.View.extend({
   },
   
   render: function() {
-    var num = this.modelData().numberOfPages;
-    if (num === undefined || num === 1) {
+    var pi = this.model().getPaginationInfo();
+    if (!pi || pi.numberOfPages === 1) {
       this.viewSpec.virtual = false;
       this.canvas.virtual = false;
     }
     this.controller().updateTitle();
     this._super();
-    this.renderData(Trillo.convertToPage(this.modelData()));
+    this.renderData(this._modelDataWithPagination());
   },
   
   renderData: function(data) {
@@ -3419,9 +4081,15 @@ Trillo.CollectionView = Trillo.View.extend({
     this.canvas.windowResized();
     this._super();
   },
+ 
+  layoutContainers2: function() {
+    if (this.cleared) return;
+    this.canvas.windowResized();
+    this._super();
+  },
   
   loadPage: function(pageNumber, requireClearing) {
-    $.when(this.model().loadData(pageNumber)).done($.proxy(this.pageLoaded, this, requireClearing));
+    $.when(this.apiAdapter().loadData(pageNumber, requireClearing)).done($.proxy(this.pageLoaded, this, requireClearing));
   },
   
   //model and this._model will be same as the current model
@@ -3429,12 +4097,36 @@ Trillo.CollectionView = Trillo.View.extend({
     if (requireClearing) {
       this.canvas.clear();
     }
-    this.canvas.setContent(Trillo.convertToPage(this.modelData()));
+    this.canvas.setContent(this._modelDataWithPagination());
+  },
+  
+  postShow: function(myDeferred) {
+    this.selectCollectionItem(this.controller().getParam("sel"));
+    this._super(myDeferred);
+  },
+  
+  selectCollectionItem: function(uid) {
+    var selected = this.canvas.selectItemByUid(uid);
+    // If selection is null and view specifies a nextView that is 
+    // triggered by "selection" then select first item if present.
+    if (!selected && this.hasSelectionTrigger()) {
+      var list = this.modelData();
+      if (list && list.length > 0) {
+        uid = list[0].uid;
+        this.controller().setParam("sel", uid);
+        selected = this.canvas.selectItemByUid(uid);
+      } 
+    }
   },
   
   selectInfoItem: function(infoItem) {
     this.selectedInfoItem = infoItem;
-    this.setSelectedObj(infoItem.obj);
+    if (infoItem) {
+      this.setSelectedObj(infoItem.obj);
+      if (this.hasSelectionTrigger() && infoItem.obj) {
+        this.controller().setParam("sel", infoItem.obj.uid);
+      }
+    }
   },
   
   unselectInfoItem: function(infoItem) {
@@ -3443,11 +4135,22 @@ Trillo.CollectionView = Trillo.View.extend({
   },
   
   clicked: function(infoItem, ev) {
-    return this.controller().clicked(infoItem ? infoItem.$rootE : null, infoItem ? infoItem.obj : null, ev);
+    if (infoItem && infoItem.obj && infoItem.obj.name) {
+      return this.controller()._handleClickGeneric(infoItem.obj.name, infoItem.$rootE, infoItem.obj, ev);
+    }
   },
   
   infoItemDblClicked: function(infoItem, ev) {
-    return this.controller().dblClicked(infoItem ? infoItem.$rootE : null, infoItem ? infoItem.obj : null, ev);
+    // double click navigates to detail if there is no navigation due to "selection" trigger.
+    if (infoItem && infoItem.obj && !this.hasSelectionTrigger()) {
+      return this.controller().doTriggerNextView("detail", infoItem.obj);
+    }
+    return false;
+  },
+  
+  /* Checks if there is next view that will be triggered on selection. */
+  hasSelectionTrigger: function() {
+    return this.viewSpec.getNextViewSpecByTrigger("selection");
   },
   
   objChanged: function(obj) {
@@ -3465,12 +4168,12 @@ Trillo.CollectionView = Trillo.View.extend({
   
   doSort: function(ev) {
     var $e = $(ev.target);
-    $e = Trillo.getClosestNamedElem($e);
+    $e = Trillo.getClosestLabelElem($e);
     if (!$e) {
-      Trillo.alert.showError("Error", "Missing 'name' attribute in the header, pl. specify in the HTML temlpate");
+      Trillo.alert.showError("Error", "Missing 'for' attribute in the header, pl. specify in the HTML temlpate");
       return;
     }
-    var name = $e.dataOrAttr("nm");
+    var name = $e.dataOrAttr("for");
     var currentSort = this.sortSpec[name];
     if (currentSort === "asc") {
       currentSort = "desc";
@@ -3496,7 +4199,7 @@ Trillo.CollectionView = Trillo.View.extend({
       // local model
       this.model().doSort(name, currentSort);
       this.canvas.clear();
-      this.canvas.setContent(Trillo.convertToPage(this.modelData()));
+      this.canvas.setContent(this._modelDataWithPagination());
     }
   },
   
@@ -3507,6 +4210,16 @@ Trillo.CollectionView = Trillo.View.extend({
   
   changeAttr: function(obj, name, value) {
     this.model().setObjAttr(obj, name, value);
+  },
+  
+  _modelDataWithPagination: function() {
+    var data = this.modelData();
+    var pi = this.model().getPaginationInfo();
+    if (!pi) {
+      pi = Trillo.makePaginationInfo(data);
+    }
+    pi.items = data;
+    return pi;
   }
 });
 
@@ -3538,7 +4251,7 @@ Trillo.DropdownView = Trillo.ViewSelectionView.extend({
   
   renderList: function() {
     var $temp = this.$e.find(this.listCss);
-    var l = Trillo.listFromPage(this.modelData());
+    var l = this.modelData();
     if (Trillo.HtmlTemplates.dropdownListItem && !Trillo.HtmlTemplates.dropdownListItem__parsed__) {
       Mustache.parse(Trillo.HtmlTemplates.dropdownListItem);
       Trillo.HtmlTemplates.dropdownListItem__parsed__ = true;
@@ -3557,13 +4270,16 @@ Trillo.DropdownView = Trillo.ViewSelectionView.extend({
     this._super(myDeferred);
   },
   
+  // Dropdown view is mainly for the list of objects therefore it uses "uid" in the selected item value.
+  // If required, make up a uid and set for each object in the list in controller or model using
+  // pre-processing hooks.
   selectItem: function() {
-    var uid = this.controller().getMySelection();
+    var uid = this.controller().getParam("sel");
     var selected = null;
     if (uid) {
       selected = this.model().getObj(uid);
     }
-    var items = Trillo.listFromPage(this.modelData());
+    var items = this.modelData();
     if (!selected && items.length > 0) {
       selected = items[0];
       uid = selected.uid;
@@ -3599,7 +4315,7 @@ Trillo.DropdownView = Trillo.ViewSelectionView.extend({
     this.$e.find(this.labelSelector).html(html);
   },
   
-  _getNextViewName: function(historySpec) {
+  _getNextViewName: function() {
     var item = this.selectedObj;
     if (item) {
       return Trillo.isUid(item.uid) ? null : item.uid;
@@ -3991,7 +4707,7 @@ Trillo.ChartView = Trillo.View.extend({
   },
   
   loadPage: function(pageNumber) {
-    $.when(this.model().loadData(pageNumber)).done($.proxy(this.pageLoaded, this));
+    $.when(this.apiAdapter().loadData(pageNumber)).done($.proxy(this.pageLoaded, this));
   },
   
   pageLoaded: function(model) {
@@ -3999,19 +4715,16 @@ Trillo.ChartView = Trillo.View.extend({
   },
   
   renderCharts: function() {
-    if (!this.viewSpec.charts) {
+    var vs = this.viewSpec;
+    if (!vs.chartSpecs) {
       return;
     }
-    var deferred = Trillo.chartManager.getChartList(this.viewSpec.charts);
-    deferred.done($.proxy(this._renderCharts, this));
+    this._renderCharts(vs.chartSpecs);
   },
   
   _renderCharts: function(chartList) {
     var i;
-    var l;
     this.charts.length = 0;
-    l = this.viewSpec.charts;
-    if (!l) return;
     for (i=0; i<chartList.length; i++) {
       this.renderChart(chartList[i]);
     }
@@ -4019,8 +4732,14 @@ Trillo.ChartView = Trillo.View.extend({
   
   renderChart: function(spec) {
     debug.debug("Rendering chart: " + spec.name);
-    if (spec.type === "pie") {
-      this.renderPieChart(spec);
+    if (spec.axis && spec.axis.x && spec.axis.x.type === "timeseries"&& spec.axis.x.tick) {
+      var func = Trillo.getRefByQualifiedName(spec.axis.x.tick);
+      if (func) {
+        spec.axis.x.tick = func;
+      }
+    }
+    if (spec.type === "pie" || spec.type === "donut" || spec.type === "gauge") {
+      this.renderSliceChart(spec);
     } else {
       this.renderXYChart(spec);
     }
@@ -4061,24 +4780,26 @@ Trillo.ChartView = Trillo.View.extend({
     var cdata = {
         x: xAttr,
         columns: columns,
-        type : spec.type
+        type : spec.type,
+        groups: spec.groups
     };
-    var chart = c3.generate({
+    var coptions = {
       bindto: "#" + this.viewSpec.elemId + " .chart",
       data: cdata,
-      axis: spec.axis,
-      legend : {
-        show: true
-      },
-      transition: {
-        duration: 0
-      }
-    });
+      axis: spec.axis
+    };
+    
+    this.updateOptions(coptions, spec);
+    
+    coptions.legend = coptions.legend || { show: true};
+    coptions.transition = coptions.transition || { duration: 0};
+  
+    var chart = c3.generate(coptions);
     
     this.setChartElement(spec, chart);
   },
   
-  renderPieChart: function(spec) {
+  renderSliceChart: function(spec) {
     var columns = [];
     var dt = Trillo.chartDataFromModelData(spec.name, this.modelData());
     var xAttr = spec.xAttr;
@@ -4119,9 +4840,9 @@ Trillo.ChartView = Trillo.View.extend({
         type : spec.type
     };
     
-    var pie = null;
+    var sliceOption;
     if (spec.label) {
-      pie = {
+      sliceOption = {
         label : {
           format: function (value, ratio, id) {
             return value + " " + spec.label;
@@ -4130,11 +4851,40 @@ Trillo.ChartView = Trillo.View.extend({
       };
     }
     
-    var chart = c3.generate({
-      data: cdata,
-      pie: pie
-    });
+    var coptions = {
+        data: cdata
+    };
+    
+    if (sliceOption) {
+      if (spec.type === 'pie') {
+        coptions.pie = sliceOption;
+      } else if (spec.type === 'donut') {
+        coptions.donut = sliceOption;
+      } else if (spec.type === 'gauge') {
+        coptions.gauge = sliceOption;
+      }
+    }
+    
+    this.updateOptions(coptions, spec);
+    
+    var chart = c3.generate(coptions);
     this.setChartElement(spec, chart);
+  },
+  
+  updateOptions : function(opt, specs) {
+    var skip = {
+      xAttr: true,
+      yAttrs: true,
+      type: true,
+      displayName: true,
+      label: true,
+      groups: true
+    };
+    $.each( specs, function( key, value ) {
+      if (!skip[key]) {
+        opt[key] = value;
+      }
+    });
   },
   
   setChartElement: function(spec, chart) {
@@ -4196,9 +4946,9 @@ Trillo.ContentView = Trillo.View.extend({
       internalRoute = internalRoute + (i > 0 ? "/" : "") + routeSpecArr[indexOfNextView + i].name;
     }
     this.internalRoute = internalRoute;
-    $e.find(".js-pointed").remove();
     var p = this.parentView();
-    if (p && p.viewSpec.type === "toc" && $foundE) {
+    if (p && p.viewSpec.type === "toc") {
+      $e.find(".js-pointed").remove();
       var $sp = $("<span></span>");
       $sp.addClass(Trillo.CSS.pointed + " js-pointed");
       var $firstChild = $foundE.find(":first-child").filter(":header");
@@ -4210,6 +4960,8 @@ Trillo.ContentView = Trillo.View.extend({
         p.synchWithRouteState($foundE.dataOrAttr("nm")); // probably not required.
       }
       this.scrollIntoView($foundE);
+    } else {
+      n = 0;
     }
     
     return n; // we always consume rest of the path in the content view
@@ -4230,6 +4982,10 @@ Trillo.ContentView = Trillo.View.extend({
       $(window).scrollTop(scrollTo);
     }, 0);
     return;
+  },
+  
+  getNextViewName: function(parentPath) {
+    return null;
   }
 });
 Trillo.TocView = Trillo.ViewSelectionView.extend ({
@@ -4241,32 +4997,42 @@ Trillo.TocView = Trillo.ViewSelectionView.extend ({
   initialize : function($e, controller, viewSpec) {
     this._super($e, controller, viewSpec);
     this.viewSelectedMethod = $.proxy(this.viewSelected, this);
-    this.mouseOverHandler = $.proxy(this.onMouseOver, this);
-    this.mouseOutHandler = $.proxy(this.onMouseOut, this);
-    this.delayedOnMouseOut = $.proxy(this._onMouseOut, this);
+    var $sb = Trillo.findAndSelf(this.$e, ".js-non-native-scrollbar");
+    if ($sb.length) {
+      this.setNonNativeScrollBar($sb);
+    } else {
+      this.mouseOverHandler = $.proxy(this.onMouseOver, this);
+      this.mouseOutHandler = $.proxy(this.onMouseOut, this);
+      this.delayedOnMouseOut = $.proxy(this._onMouseOut, this);
+    }
   },
   
   postShow: function(myDeferred) {
-    this.$e.on("mouseover", this.mouseOverHandler);
-    this.$e.on("mouseout", this.mouseOutHandler);
+    if (this.mouseOverHandler) {
+      this.$e.on("mouseover", this.mouseOverHandler);
+      this.$e.on("mouseout", this.mouseOutHandler);
+    }
+    this.updateScrollBar();
     this._super(myDeferred);
   },
   
   clear: function() {
-    this.$e.off("mouseover", this.mouseOverHandler);
-    this.$e.off("mouseout", this.mouseOutHandler);
+    if (this.mouseOverHandler) {
+      this.$e.off("mouseover", this.mouseOverHandler);
+      this.$e.off("mouseout", this.mouseOutHandler);
+    }
     this._super();
   },
   
-  getNextViewName: function(historySpec, parentPath) {
+  getNextViewName: function(parentPath) {
     var $t = this.$e.find(".js-item"); 
     if ($t.length > 0) {
       return this.viewSpec.getNextPath($t.dataOrAttr("nm"));
     }
-    return this._super(historySpec, parentPath);
+    return this._super(parentPath);
   },
   
-  _getNextViewName: function(historySpec) {
+  _getNextViewName: function() {
     return null;
   },
   
@@ -4284,9 +5050,9 @@ Trillo.TocView = Trillo.ViewSelectionView.extend ({
   
   //view selection related method, mixin for NavView and TabView
   viewSelected: function(ev) {
-    Trillo.contextMenuManager.hideCurrentContextMenu();
+    Trillo.hideCurrentOverlays(true, true);
     if (ev) {
-      //ev.stopPropagation();
+      ev.stopPropagation();
       ev.preventDefault();
     }
     var $e2 = $(ev.target).closest(this.itemCss);
@@ -4298,12 +5064,15 @@ Trillo.TocView = Trillo.ViewSelectionView.extend ({
       }).get();
       var path;
       if (l.length) {
+        // since the parents are collected in the reverse order of path
+        l = l.reverse();
         path = l.join("/") + "/" + newName;
       } else {
         path = newName;
       }
       this.postViewSelected(path);
     }
+    this.setContainerVisibility();
   },
   
   clearTimeout : function() {
@@ -4315,7 +5084,7 @@ Trillo.TocView = Trillo.ViewSelectionView.extend ({
   
   onMouseOver : function() {
     this.clearTimeout();
-    this.$e.find(".js-scrollbar").css("overflow", "auto");
+    this.$e.find(".js-toc-container").css("overflow", "auto");
   },
 
   onMouseOut : function() {
@@ -4325,8 +5094,1158 @@ Trillo.TocView = Trillo.ViewSelectionView.extend ({
 
   _onMouseOut : function() {
     this.clearTimeout();
-    this.$e.find(".js-scrollbar").css("overflow", "hidden");
+    this.$e.find(".js-toc-container").css("overflow", "hidden");
   }
+});
+Trillo.FlexGridView = Trillo.View.extend({
+  initialize : function($e, controller, viewSpec) {
+    this._super($e, controller, viewSpec);
+  },
+  
+  init2: function() {
+    this.setupView();
+    this._super();
+  },
+  
+  setupView: function() {
+   var $te, $rows, temp, n;
+   
+   var $ge = this.$e.find(".js-flex-grid");
+   if ($ge.length === 0) {
+     $ge = this.$e;
+   } else if ($ge.length > 1) {
+     // select first one (others are embedded flex grids)
+     $ge = $($ge[0]);
+   }
+   this.$gridElem = $ge;
+   this.gridSpec = {$e : $ge, id: this.name};
+   this.specs = [];
+   
+   if (this.$c) {
+     this.$c.append(this.$e);
+   }
+   
+   this.lastId = 0;
+   this.updateRowSpecs($ge, this.specs);
+   
+   this.$iconBar = this.$e.find(".js-flex-grid-iconbar");
+   this.$minifyIcon = this.$e.find(".js-flex-minified-icon");
+   this.$minifyIcon.remove();
+   if (this.$iconBar.children().length === 0) {
+     this.$iconBar.addClass("hide");
+   }
+   this.showHideSpecs = []; // keeps a list of elements which are inside leaf nodes of spec tree
+   this.makeShowHideSpecs(this.specs);
+  },
+  
+  updateRowSpecs: function($e, specs) {
+    var $te, rowSpec;
+    var name = this.name;
+    var self = this;
+    var $cl = $e.children();
+    $cl.each(function () {
+      $te = $(this);
+      if ($te.hasClass('js-flex-row')) {
+        rowSpec = self.makeRowSpec($te, self.gridSpec, "row");
+        specs.push(rowSpec);
+        self.updateRowChildrenSpecs(rowSpec);
+      }
+    });
+  },
+  
+  updateRowChildrenSpecs: function(rowSpec) {
+    var $te, type, spec, $c;
+    var cSpecs = [];
+    var $cl = rowSpec.$e.children();
+    if ($cl.length == 1) {
+      // check if the element is auto sized within row
+      $c = $($cl[0]);
+      if (!$c.hasClass("js-flex-col") && !$c.hasClass("js-flex-cell")) {
+        return;
+      }
+    }
+    var self = this;
+    $cl.each(function () {
+      $te = $(this);
+      type = $te.hasClass("js-flex-col") ? "col" : "cell";
+      if (type === "col") {
+        spec = self.makeColSpec($te, rowSpec, type);
+        self.updateColChildrenSpecs(spec);
+      } else {
+        spec = self.makeCellSpec($te, rowSpec, type);
+      }
+      cSpecs.push(spec);
+    });
+    
+    rowSpec.children = cSpecs;
+  },
+  
+  updateColChildrenSpecs: function(colSpec) {
+    var $te, spec, temp, gap, type;
+    var cSpecs = [];
+    var $cl = colSpec.$e.children();
+    var $c;
+    if ($cl.length == 1) {
+      // check if the element is auto sized within col
+      $c = $($cl[0]);
+      if (!$c.hasClass("js-flex-row") && !$c.hasClass("js-flex-cell")) {
+        return;
+      }
+    }
+    var self = this;
+    $cl.each(function () {
+      $te = $(this);
+      type = $te.hasClass("js-flex-row") ? "row" : "cell";
+      if (type === "row") {
+        spec = self.makeRowSpec($te, colSpec, type);
+        self.updateRowChildrenSpecs(spec);
+      }  else {
+        spec = self.makeCellSpec($te, colSpec, "cell");
+      }
+      cSpecs.push(spec);
+    });
+    colSpec.children = cSpecs;
+  },
+  
+  makeBaseSpec: function($te, parent, type) {
+    var id;
+    id = $te.dataOrAttr("id");
+    if (!id) {
+      id = parent.id + "." + (++this.lastId);
+      $te.attr("id", id);
+    }
+    var spec = {$e: $te, id: id, type: type, flexWidth: true, flexHeight: true, parent: parent};
+    /* 
+     This is moved to baseView.init2();
+     if ($te.dataOrAttr("trigger")) {
+      spec.popover = Trillo.popoverManager.createPopoverForContent($te);
+    }
+   */
+    return spec;
+  },
+  
+  makeRowSpec: function($te, parent, type) {
+    var spec = this.makeBaseSpec($te, parent, type);
+    this.updateCommonAttributes(spec);
+    return spec;
+  },
+  
+  makeColSpec: function($te, parent, type) {
+    var spec = this.makeBaseSpec($te, parent, type);
+    this.updateCommonAttributes(spec);
+    return spec;
+  },
+  
+  makeCellSpec: function($te, parent, type) {
+    var spec = this.makeBaseSpec($te, parent, type);
+    this.updateCommonAttributes(spec);
+    return spec;
+  },
+  
+  makeShowHideSpecs: function(specs) {
+    var cs, i, $el;
+    var self = this;
+    var showHideSpecFunc = function () {
+     var $te = $(this);
+     var spec = {};
+     var temp = $te.dataOrAttr("show-exp");
+     if (temp) {
+       spec.showExp = self.parseExp(temp);
+     }
+     temp = $te.dataOrAttr("hide-exp");
+     if (temp) {
+       spec.hideExp = self.parseExp(temp);
+     }
+     if (spec.hideExp || spec.showSpec) {
+       spec.$e = $te;
+       self.showHideSpecs.push(spec);
+     }
+    };
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (!cs.children || cs.children.length === 0) {
+        $el = $("[show-exp], [hide-exp]", cs.$e);
+        $el.each(showHideSpecFunc);
+      } else {
+        this.makeShowHideSpecs(cs.children);
+      }
+    }
+  },
+  
+  updateCommonAttributes: function(spec) {
+    var w, h, temp;
+    var $te = spec.$e;
+    this.setMargins(spec, $te);
+    this.setPaddings(spec, $te);
+    this.setBordersWidth(spec, $te);
+    this.setNonContentExtra(spec);
+    temp = $te.dataOrAttr("min-width");
+    w = temp ? parseInt(temp, 10) : undefined;
+    if (!Trillo.isNumeric(w)) {
+      w = -1;
+    }
+    temp = $te.dataOrAttr("min-height");
+    h = temp ? parseInt(temp, 10) : undefined;
+    if (!Trillo.isNumeric(h)) {
+      h = -1;
+    }
+    spec.inputMinW = w;
+    spec.inputMinH = h;
+    
+    temp = $te.dataOrAttr("max-width");
+    w = temp ? parseInt(temp, 10) : undefined;
+    if (!Trillo.isNumeric(w)) {
+      w = -1;
+    }
+    temp = $te.dataOrAttr("max-height");
+    h = temp ? parseInt(temp, 10) : undefined;
+    if (!Trillo.isNumeric(h)) {
+      h = -1;
+    }
+    spec.inputMaxW = w;
+    spec.inputMaxH = h;
+    
+    temp = $te.dataOrAttr("flex-width");
+    if (temp) {
+      temp = temp.toLowerCase();
+      spec.flexWidth = !(temp === "false" || temp === "no");
+    }
+    
+    temp = $te.dataOrAttr("flex-height");
+    if (temp) {
+      temp = temp.toLowerCase();
+      spec.flexHeight = !(temp === "false" || temp === "no");
+    }
+    
+    temp = $te.dataOrAttr("show-exp");
+    if (temp) {
+      spec.showExp = this.parseExp(temp);
+    }
+    
+    temp = $te.dataOrAttr("hide-exp");
+    if (temp) {
+      spec.hideExp = this.parseExp(temp);
+    }
+    
+    var dp = $te.css("position");
+    dp = dp ? dp.toLowerCase() : "";
+    if (dp !== "fixed" && dp !== "absolute") {
+      $te.width($te.width()); // so children geometry is not distorted
+      $te.height($te.height());
+      $te.css("position", "absolute");
+    }
+  },
+  
+  parseExp: function(exp) {
+    if (!exp) return null;
+    var op = exp.replace(new RegExp('[0-9]', 'g'), '');
+    var num = exp.replace(new RegExp('\\D', 'g'), '');
+    return {
+      op: $.trim(op),
+      val: parseInt(num, 10)
+    };
+  },
+  
+  processShowHideSpecs: function() {
+    var cs, d;
+    var viewPortW =  Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    for (var i=0; i<this.showHideSpecs.length; i++) {
+      cs = this.showHideSpecs[i];
+      d = cs.$e.css("display");
+      if (cs.showExp) {
+        if (this.isTrue(cs.showExp, viewPortW)) {
+          if (d === "none") {
+            cs.display = "none";
+            cs.$e.css("display", "");
+          }
+        } else if (cs.display === "none") {
+          cs.$e.css("display", "none");
+          cs.display = "";
+        }
+      } else if (cs.hideExp) {
+        if (this.isTrue(cs.hideExp, viewPortW)) {
+          if (d !== "none") {
+            cs.display = cs.$e.css("display");
+            cs.$e.css("display", "none");
+          }
+        } else if (cs.display) {
+          cs.$e.css("display", cs.display);
+          cs.display = null;
+        }
+      }
+    }
+  },
+  
+  makeVisibleList: function(specs) {
+    var cs, i, hide;
+    var vcl = [];
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (this.isDetached(cs)) {
+        continue; // this element is detached from DOM tree (probably added to a popover)
+      }else if (this.isHidden(cs)) {
+        cs.$e.css("left", "-10000px");
+        continue;
+      } else if (cs.showExp || cs.hideExp) {
+        if (cs.$e.css("display") === "none") {
+          cs.$e.css("display", "");
+        }
+        if (cs.$e.css("visibility") === "hidden") {
+          cs.$e.css("visibility", "visible");
+        }
+      }
+      if (cs.type === "cell" || !cs.children || cs.children.length === 0) {
+        cs.$e.css({height: ''}); // so the its content can flow vertically to fit.
+        cs.$e.css({width: ''});
+      }
+      if (cs.children) {
+        cs.vcl = this.makeVisibleList(cs.children);
+        vcl.push(cs);
+      } else {
+        vcl.push(cs);
+      }
+    }
+    return vcl;
+  },
+  
+  isDetached: function(cs) {
+    return cs.parent.$e[0] !== cs.$e.parent()[0];
+  },
+  
+  isHidden: function(cs) {
+    // showExp gets precedence over hideExp (only first one is applicable when both present).
+    var viewPortW =  Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    if (cs.$e.hasClass("js-container") && cs.$e.children().length === 0) {
+      return true;
+    }
+    if (cs.showExp) {
+      if (this.isTrue(cs.showExp, viewPortW)) {
+        cs.$e.removeClass("trillo-hidden");
+      } else {
+        cs.$e.addClass("trillo-hidden");
+      }
+    } else if (cs.hideExp) {
+      if (this.isTrue(cs.hideExp, viewPortW)) {
+        cs.$e.addClass("trillo-hidden");
+      } else {
+        cs.$e.removeClass("trillo-hidden");
+      }
+    }
+    if (cs.hidden || cs.$e.css("display") === "none" || (cs.$e.css("visibility") === "hidden")) {
+      return true;
+    }
+    return false;
+  },
+  
+  isTrue: function(exp, ww) {
+    var v = exp.val;
+   
+    switch (exp.op) {
+    case "<=" : 
+      return ww <= v;
+    
+    case "<" : 
+      return ww < v;
+      
+    case ">=" : 
+      return ww >= v;
+      
+    case ">" : 
+      return ww > v;
+      
+    default: break;
+    }
+    return false;
+  },
+  
+  updateWidths: function(specs) {
+    var cs, i;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (cs.type === "row") {
+        this.updateRowWidths(cs);
+        // console.log("R(min/pref): " + cs.minW + " : " + cs.prefW);
+      } else if (cs.type === "col") {
+        this.updateColWidths(cs);
+        // console.log("C(min/pref): " + cs.minW + " : " + cs.prefW);
+      } else {
+        this.updateCellWidths(cs);
+      }
+    }
+  },
+  
+  updateRowWidths: function(spec) {
+    var sl = spec.vcl, cs, i;
+    var minW = 0;
+    var prefW = 0;
+    // first compute children and its dimension based on children
+    if (sl && sl.length > 0) {
+      this.updateWidths(sl);
+      for (i=0; i<sl.length; i++) {
+        cs = sl[i];
+        if (cs.minW > minW) {
+          minW = cs.minW;
+        }
+        prefW += cs.prefW;
+      }
+    } else if (spec.$e.children().length === 1) {
+      minW = prefW = this.getMinWidthFormChild(spec);
+    }
+    if (spec.inputMinW >= 0) {
+      // if specified override minW
+      minW = spec.inputMinW;
+      if (prefW < minW) {
+        prefW = minW;
+      }
+    }
+    if (spec.inputMaxW >- 0 && prefW > spec.inputMaxW) {
+      prefW = spec.inputMaxW;
+    }
+    spec.minW = minW + spec.hex;
+    spec.prefW = prefW + spec.hex;
+  },
+  
+  updateColWidths: function(spec) {
+    var sl = spec.vcl, cs, i;
+    var minW = 0;
+    // first compute children and its dimension based on children
+    if (sl && sl.length > 0) {
+      this.updateWidths(sl);
+      for (i=0; i<sl.length; i++) {
+        cs = sl[i];
+        if (cs.minW > minW) {
+          minW = cs.minW;
+        }
+      }
+    } else if (spec.$e.children().length === 1) {
+      minW = this.getMinWidthFormChild(spec);
+    }
+    if (spec.inputMinW >= 0) {
+      // if specified override minW
+      minW = spec.inputMinW;
+    }
+    spec.minW = spec.prefW = minW + spec.hex;
+  },
+  
+  updateCellWidths: function(spec) {
+    if (spec.inputMinW < 0) {
+      // width of element is a good indicator of proportionate min-width when it is not available.
+      spec.prefW = spec.minW = Math.ceil(spec.$e[0].getBoundingClientRect().width) + spec.lm + spec.rm;
+    } else {
+      spec.prefW = spec.minW = spec.inputMinW;
+    }
+  },
+  
+  updateHeights: function(specs) {
+    var cs, i;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (cs.type === "cell") {
+        if (cs.inputMinH < 0) {
+          if (cs.$e.children().length === 1) {
+            cs.minH = this.getMinHeightFormChild(cs);
+          } else {
+            cs.minH = cs.$e[0].getBoundingClientRect().height + cs.tm + cs.bm;
+          }
+        } else {
+          cs.minH = cs.inputMinH;
+        }
+      } else {
+        cs.minH = cs.inputMinH;
+        if ((!cs.children || cs.children.length === 0) && cs.inputMinH < 0) {
+          // this is a row or column without any children, if it
+          // has one child element then use it to compute its height.
+          if (cs.$e.children().length === 1) {
+            cs.minH = this.getMinHeightFormChild(cs);
+          }
+        }
+        if (cs.vcl) {
+          this.updateHeights(cs.vcl);
+        }
+      }
+    }
+  },
+  
+  getMinWidthFormChild: function(cs) {
+    var margins = {};
+    this.setMargins(margins, cs.$e);
+    return Math.ceil(cs.$e.children()[0].getBoundingClientRect().width + cs.hex + margins.lm + margins.rm);
+  },
+  
+  getMinHeightFormChild: function(cs) {
+    var margins = {};
+    this.setMargins(margins, cs.$e);
+    return Math.ceil(cs.$e.children()[0].getBoundingClientRect().height + cs.vex + margins.tm + margins.bm);
+  },
+  
+  computeRowsWidth: function(specs, containerWidth) {
+    var cs, i, w;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (cs.type === "row") {
+        w = cs.inputMaxW >= 0 ? cs.inputMaxW : containerWidth;
+        cs.w = w;
+        this.computeRowChildrenWidth(cs, w - cs.hex);
+      }
+    }
+  },
+  
+  computeRowChildrenWidth: function(spec, availableWidth) {
+    var sl = spec.vcl, cs, i;
+    var subRows = [];
+    var subRow = {w:0, l: []};
+    var w = 0;
+    var newW;
+    spec.subRows = subRows;
+    if (!sl || spec.minW === 0) {
+      return;
+    }
+   
+    for (i=0; i<sl.length; i++) {
+      cs = sl[i];
+      cs.w = cs.minW; // each element of row takes its minimum required space
+      newW = w + cs.minW;
+      if (this.rowLimit(cs, w, availableWidth)) {
+        if (subRow.l.length) {
+          // start new sub-row
+          subRow.w = w;
+          subRows.push(subRow);
+          subRow = {w:0, l: []};
+          w = 0;
+        }
+      }
+      w += cs.minW;
+      subRow.l.push(cs);
+    }
+    if (subRow.l.length) {
+      // push last sub-row
+      subRows.push(subRow);
+      subRow.w = w;
+    }
+    
+    //console.log("Number of rows: " + subRows.length);
+    
+    this.distRowExtraToPref(subRows, availableWidth); // distribute extra space to cells with prefW > minW
+    if (this.updateOccupancy(subRows, availableWidth)) {
+      // cell were adjusted
+      // check if preferred width can be updated.
+      this.distRowExtraToPref(subRows, availableWidth);
+    }
+    this.distRowExtraToAll(subRows, availableWidth); // distribute extra space to all cells proportionately
+    
+    for (i=0; i<sl.length; i++) {
+      cs = sl[i];
+      if (cs.type === "col") {
+        this.computeColChildrenWidth(cs);
+      }
+    }
+  },
+  
+  rowLimit: function(spec, filledW, availableW) {
+    var newFilled = filledW + spec.minW;
+    return newFilled > availableW;
+  },
+  
+  computeColChildrenWidth: function(spec) {
+    var sl = spec.vcl, cs, i;
+    if (!sl) {
+      return;
+    }
+    var availableW = spec.w - spec.hex;
+    for (i=0; i<sl.length; i++) {
+      cs = sl[i];
+      cs.w = availableW;
+      if (cs.type === "row") {
+        if (cs.vsl) {
+          this.computeRowsWidth(cs.vcl, availableW);
+        } else {
+          cs.subRows = {w:0, l: []};
+          cs.w = availableW;
+        }
+      }
+    }
+  },
+  
+  // if a sub-row has more available space then previous,
+  // it  checks it the cells of previous row can be moved
+  // down to make occupancy more equitable.
+  updateOccupancy: function(subRows, availableWidth) {
+    var cur, prev, cs;
+    var diff;
+    var f = false;
+    var curExtra, prevExtra;
+    for (var i=subRows.length-1; i >= 1; i--) {
+      prev = subRows[i-1];
+      if (prev.l.length <= 1) {
+        continue;
+      }
+      cur = subRows[i];
+      curExtra = availableWidth - cur.w;
+      prevExtra = availableWidth - prev.w;
+      diff = curExtra - prevExtra;
+      cs = prev.l[prev.l.length-1];
+      if (diff > cs.w) {
+        prev.l.pop();
+        prev.w -= cs.w;
+        cur.l.unshift(cs);
+        cur.w += cs.w;
+      }
+    }
+    if (f) {
+      // iterate again
+      this.updateOccupancy(subRows, availableWidth);
+    }
+    return f;
+  },
+  
+  distRowExtraToPref: function(subRows, availableWidth) {
+    for (var i=0; i<subRows.length; i++) {
+      this._distRowExtraToPref(subRows[i], availableWidth);
+    }
+  },
+  
+  _distRowExtraToPref: function(subRow, availableWidth) {
+    var s, i;
+    var extra = availableWidth - subRow.w;
+    var reqAllW = 0, reqMyW;
+    var l = subRow.l;
+    if (extra <= 0) {
+      return;
+    }
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      if (s.w < s.prefW) {
+        reqAllW += s.prefW - s.w;
+      }
+    }
+    
+    if (reqAllW === 0) {
+      return; // preferred and minimum all same for all
+    }
+    
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      if (s.w < s.prefW) {
+        reqMyW = (extra * (s.prefW - s.w)) / reqAllW;
+        if (reqMyW >  (s.prefW - s.w)) {
+          reqMyW =  s.prefW - s.w;
+        }
+        // console.log("Pref - width increment: " + reqMyW);
+        s.w += reqMyW; // update width of cell
+        subRow.w += reqMyW; // also width of sub row
+      }
+    }
+  },
+  
+  distRowExtraToAll: function(subRows, availableWidth) {
+    for (var i=0; i<subRows.length; i++) {
+      this._distRowExtraToAll(subRows[i], availableWidth);
+    }
+  },
+  
+  _distRowExtraToAll: function(subRow, availableWidth) {
+    var s, i;
+    var extra = availableWidth - subRow.w;
+    var reqAllW = 0, reqMyW;
+    var l = subRow.l;
+    if (extra <= 0 || l.length === 0) {
+      return;
+    }
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      this.updateWidthWeight(s);
+      reqAllW += s.ww;
+    }
+    if (reqAllW === 0) {
+      // if flex-width is false of all row
+      return;
+    }
+    var availableAfter = extra;
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      reqMyW = (extra * s.ww) / reqAllW;
+      if (s.inputMaxW >= 0 && (s.w + reqMyW > s.inputMaxW)) {
+        reqMyW = s.inputMaxW - s.w;
+      }
+      // console.log("All - width increment: " + reqMyW);
+      s.w += reqMyW; // update width of cell
+      subRow.w += reqMyW; // also width of sub row
+      availableAfter -= reqMyW;
+    }
+    if (Math.floor(availableAfter) > 1) {
+      if (availableAfter !== extra) {
+        // console.log("_distRowExtraToAll(), iterating again, available after: " + availableAfter + "/" + extra);
+        this._distRowExtraToAll(subRow, availableWidth);
+      }
+    } else {
+      // console.log("Final row width: " + subRow.w + " / " + availableWidth);
+    }
+  },
+  
+  updateWidthWeight: function(spec) {
+    if (!spec.flexWidth || (spec.inputMaxW >= 0 && spec.w >= spec.inputMaxW)) {
+      spec.ww = 0;
+    } else {
+      spec.ww = spec.w;
+    }
+  },
+  
+  setNewWidth: function(specs) {
+    var cs, i;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      cs.$e.outerWidth(Math.round(cs.w) - cs.lm - cs.rm);
+      if (cs.vcl) {
+        this.setNewWidth(cs.vcl);
+      }
+    }
+  },
+  
+  computeRowsHeight: function(specs) {
+    var i;
+    for (i=0; i<specs.length; i++) {
+      this.computeRowHeight(specs[i]);
+    }
+  },
+  
+  computeRowHeight: function(spec) {
+    var i, h;
+    h = 0;
+    for (i=0; i<spec.subRows.length; i++) {
+      this._computeRowHeight(spec.subRows[i]);
+      h += spec.subRows[i].h;
+    }
+    if (spec.inputMinH > h) {
+      h = spec.inputMinH;
+    }
+    spec.h = h + spec.vex;
+    // console.log("Row height: " + h);
+  },
+  
+  _computeRowHeight: function(subRow) {
+    var s, i;
+    var l = subRow.l;
+   
+    var h = 0;
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      if (s.type === "col") {
+        this.computeColHeight(s);
+      } else {
+        s.h = s.minH;
+      }
+      if (h < s.h) {
+        h = s.h;
+      }
+    }
+    
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      if (s.type === "col" && s.h < h) {
+        this.distColExtraToAll(s.vcl, s.h - s.vex, h);
+      }
+      s.h = h;
+    }
+    
+    subRow.h = h;
+    // console.log("Subrow height: " + h);
+  },
+  
+  incrRowHeight: function(spec, incr) {
+    var i, h;
+    h = 0;
+    for (i=0; i<spec.subRows.length; i++) {
+      h += spec.subRows[i].h;
+    }
+    for (i=0; i<spec.subRows.length; i++) {
+      this._incrRowHeight(spec.subRows[i], (spec.subRows[i].h * incr) / h);
+    }
+    spec.h += incr;
+  },
+  
+  _incrRowHeight: function(subRow, incr) {
+    var s, i;
+    var l = subRow.l;
+   
+    var h = 0;
+    for (i=0; i<l.length; i++) {
+      s = l[i];
+      if (s.type === "col") {
+        this.incrColHeight(s, incr);
+      } else {
+        s.h += incr;
+      }
+    }
+    subRow.h += incr;
+  },
+  
+  incrColHeight: function(spec, incr) {
+    this.distColExtraToAll(spec.vcl, spec.h - spec.vex, spec.h + incr);
+    spec.h += incr;
+  },
+  
+  computeColHeight: function(spec) {
+    var specs = spec.vcl, cs, i;
+    var h = 0;
+    if (!specs || specs.length === 0) {
+      spec.h = spec.minH >=0 ? spec.minH : 0;
+      return;
+    }
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (cs.type === "row") {
+        this.computeRowHeight(cs);
+      } else {
+        cs.h = cs.minH;
+      }
+      h += cs.h;
+    }
+    if (spec.inputMinH > h) {
+      h = spec.inputMinH;
+    }
+    spec.h = h + spec.vex;
+    // console.log("Column height: " + h);
+  },
+  
+  distColExtraToAll: function(specs, colHeight, availableHeight) {
+    var cs, i;
+    var extra = availableHeight - colHeight;
+    var incr;
+    if (extra <= 0 || !specs || specs.length === 0) {
+      return;
+    }
+    for (i=0; i<specs.length; i++) {
+      this.updateHeightWeight(specs[i]);
+    }
+    var reqAllH = colHeight;
+    var availableAfter = extra;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      incr = (extra * cs.wh) / reqAllH;
+      if (cs.inputMaxH >= 0 && (cs.h + incr > cs.inputMaxH)) {
+        incr = cs.inputMaxH - cs.h;
+      }
+      if (incr > 0) {
+        colHeight += incr;
+        availableAfter -= incr;
+        if (cs.type == "row") {
+          this.incrRowHeight(cs, incr);
+        } else if (cs.type == "col") {
+          this.incrColHeight(cs, incr);
+        } else {
+          cs.h += incr;
+        }
+      }
+      // console.log("Column height change: " + incr);
+    }
+    if (Math.floor(availableAfter) > 1) {
+      // availableAfter === extra means no cell can be updated, don't repeat the call. 
+      // This happens when few elements are yet to acquire height.
+      if (availableAfter !== extra) {
+        // console.log("distColExtraToAll(), iterating again, available after: " + availableAfter + "/" + extra);
+        this.distColExtraToAll(specs, colHeight, availableHeight);
+      }
+    }
+  },
+  
+  updateHeightWeight: function(spec) {
+    if (!spec.flexHeight || (spec.inputMaxH >= 0 && spec.h >= spec.inputMaxH)) {
+      spec.wh = 0;
+    } else {
+      spec.wh = spec.h;
+    }
+  },
+  
+  positionRows: function(specs) {
+    var i, s;
+    var gridSpec = this.gridSpec;
+    var left = gridSpec.lp + gridSpec.lbw;
+    var top = gridSpec.tp + gridSpec.tbw;
+    for (i=0; i<specs.length; i++) {
+      s = specs[i];
+      s.left = left;
+      s.top = top;
+      this.positionRow(s);
+      top += s.h;
+    }
+  },
+  
+  positionRow: function(spec) {
+    var subRows = spec.subRows;
+    var i, j, subRow, left, l, s;
+    var top = spec.tp + spec.tbw;
+    for (i=0; i<subRows.length; i++) {
+      subRow = subRows[i];
+      l = subRow.l;
+      left = spec.lp + spec.lbw;
+      for (j=0; j<l.length; j++) {
+        s = l[j];
+        s.top = top;
+        s.left = left;
+        left += s.w;
+        if (s.vcl) {
+          this.positionChildren(s);
+        }
+      }
+      top += subRow.h;
+    }
+  },
+  
+  positionCol: function(spec) {
+    var specs = spec.vcl, cs, i;
+    var top = spec.tp + spec.tbw;
+    if (!specs) {
+      return;
+    }
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      cs.left = spec.lp + spec.lbw;
+      cs.top = top;
+      top += cs.h;
+      if (cs.vcl) {
+        this.positionChildren(cs);
+      }
+    }
+  },
+  
+  positionChildren: function(spec) {
+    if (spec.type === "row") {
+      this.positionRow(spec);
+    } else if (spec.type === "col") {
+      this.positionCol(spec);
+    }
+  },
+  
+  computeGeometry: function() {
+    this.processShowHideSpecs();
+    var $e = this.$gridElem;
+    var vsl = this.makeVisibleList(this.specs);
+    var gridSpec = this.gridSpec;
+    this.setPaddings(gridSpec, $e);
+    this.setMargins(gridSpec, $e);
+    this.setBordersWidth(gridSpec, $e);
+    this.setNonContentExtra(gridSpec);
+    this.updateWidths(vsl);
+    this.computeRowsWidth(vsl, $e.width());
+    this.setNewWidth(vsl); // set width so height can flow as required by content (and its css)
+    this.updateHeights(vsl);
+    this.computeRowsHeight(vsl);
+    var gridHeight = 0;
+    for (var i=0; i<vsl.length; i++) {
+      gridHeight += vsl[i].h;
+    }
+    gridHeight = Math.floor(gridHeight);
+    if (this.viewSpec.type === "page") {
+      var distanceToWindowBottom = $(window).height() - $e.offset().top;
+      var availableHeight = $e.parent().height() - gridSpec.vex;
+      if (availableHeight > distanceToWindowBottom) {
+        availableHeight = distanceToWindowBottom;
+      }
+      if (gridHeight < availableHeight) {
+        this.distColExtraToAll(vsl, gridHeight, availableHeight);
+        gridHeight = availableHeight;
+      }
+    }
+    $e.height(gridHeight);
+    
+    this.positionRows(vsl);
+    return vsl;
+  },
+  
+  _renderFromSpecs: function(specs) {
+    var cs, $te, i;
+    var left, top, w, h, offset;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      $te = cs.$e;
+      left = Math.round(cs.left);
+      top = Math.round(cs.top);
+      w = Math.round(cs.w);
+      h = Math.round(cs.h);
+      if ($te.css("position") === "fixed") {
+        offset = $te.parent().offset();
+        left += offset.left;
+        top += offset.top;
+      } else {
+        $te.css({position: "absolute"});
+      }
+      $te.css({left: left + "px", top: top + "px"});
+      $te.outerWidth(w - cs.lm - cs.rm);
+      $te.outerHeight(h - cs.tm - cs.bm);
+      if (cs.vcl) {
+        this._renderFromSpecs(cs.vcl);
+      }
+    }
+  },
+  
+  _clipFixedElementHeight: function(specs) {
+    var cs, $te, i;
+    var top, w, h, offset;
+    for (i=0; i<specs.length; i++) {
+      cs = specs[i];
+      $te = cs.$e;
+      if ($te.css("position") === "fixed") {
+        h = Math.round(cs.h);
+        offset = $te.parent().offset();
+        top = Math.round(cs.top) + offset.top;
+        if (top + h > $(window).height()) {
+          h = $(window).height() - top;
+          $te.outerHeight(h - cs.tm - cs.bm);
+        }
+      }
+      if (cs.vcl) {
+        this._clipFixedElementHeight(cs.vcl);
+      }
+    }
+  },
+  
+  render: function() {
+    var t1 = (new Date()).getTime();
+    var $e = this.$gridElem;
+    var vsl = this.computeGeometry();
+    if ($e.css("position") === "static") {
+      $e.css({position : "relative"});
+    }
+    this._renderFromSpecs(vsl);
+    this._clipFixedElementHeight(vsl);
+    var t2 = (new Date()).getTime();
+    this._super();
+    console.log("Total rendering time: " + (t2-t1));
+  },
+  
+  renderData: function(data) {
+    
+  },
+  
+  minifyContent: function(id) {
+    var cs = this.specById(id);
+    if (cs) {
+      cs.hidden = true;
+      cs.top = 0;
+      cs.left = 0;
+      cs.w = 0;
+      cs.h = 0;
+      cs.$e.addClass("hide");
+      this.addMinifyIcon(cs);
+      this.windowResized();
+    }
+  },
+  
+  specById: function(id) {
+    return this._specById(this.specs, id);
+  },
+  
+  _specById: function(specs, id) {
+    var cs;
+    for (var i=0; i<specs.length; i++) {
+      cs = specs[i];
+      if (cs.id === id) {
+        return cs;
+      }
+      if (cs.children) {
+        cs = this._specById(cs.children, id);
+        if (cs) {
+          return cs;
+        }
+      }
+    }
+    return null;
+  },
+  
+  addMinifyIcon: function(cs) {
+    this.$iconBar.removeClass("hide");
+    var $e = this.$minifyIcon.clone(true);
+    $e.attr("id", cs.id);
+    $e.attr("title", cs.id); // TODO user name
+    this.$iconBar.append($e);
+    $e.on("click", $.proxy(this.unminifyContent, this));
+  },
+  
+  unminifyContent: function(ev) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    var $e = $(ev.target);
+    var id = $e.dataOrAttr("id");
+    var cs = this.specById(id);
+    if (cs) {
+      cs.hidden = false;
+      cs.$e.removeClass("hide");
+      $e.remove();
+      this.windowResized();
+    }
+    if (this.$iconBar.children().length === 0) {
+      this.$iconBar.addClass("hide");
+    }
+  },
+  
+  windowResized : function() {
+    if (this.cleared) {
+      return;
+    }
+    this.render();
+    this._super();
+  },
+  
+  setMargins: function(spec, $te) {
+    spec.lm = parseInt($te.css('margin-left'), 10);
+    spec.rm = parseInt($te.css('margin-right'), 10);
+    spec.tm = parseInt($te.css('margin-top'), 10);
+    spec.bm = parseInt($te.css('margin-bottom'), 10);
+  },
+  
+  setPaddings: function(spec, $te) {
+    spec.lp = parseInt($te.css('padding-left'), 10);
+    spec.rp = parseInt($te.css('padding-right'), 10);
+    spec.tp = parseInt($te.css('padding-top'), 10);
+    spec.bp = parseInt($te.css('padding-bottom'), 10);
+  },
+  
+  setBordersWidth: function(spec, $te) {
+    spec.lbw = parseInt($te.css('border-left-width'), 10);
+    spec.rbw = parseInt($te.css('border-right-width'), 10);
+    spec.tbw = parseInt($te.css('border-top-width'), 10);
+    spec.bbw = parseInt($te.css('border-bottom-width'), 10);
+  },
+  
+  setNonContentExtra: function(spec) {
+    spec.hex = spec.lm + spec.lp + spec.lbw + spec.rm + spec.rp + spec.rbw;
+    spec.vex = spec.tm + spec.tp + spec.tbw + spec.bm + spec.bp + spec.bbw;
+  },
+  
+  layoutContainers2: function() {
+    if (this.cleared) return;
+    this.render();
+    this._super();
+  }
+});
+
+Trillo.DashboardView = Trillo.FlexGridView.extend({
+  initialize : function($e, controller, viewSpec) {
+    this._super($e, controller, viewSpec);
+  }
+});
+
+Trillo.DashboardController = Trillo.Controller.extend({
+  
+  initialize: function(viewSpec) {
+    this._super(viewSpec);
+  },
+  
+  handleAction: function(actionName, selectedObj, $e, targetController) {
+    if (actionName === "minify") {
+      this.minifyView($e);
+      return true;
+    } 
+    return this._super(actionName, selectedObj);
+  },
+  
+  minifyView: function($e) {
+    var $te = $e.closest(".js-flex-cell");
+    if (this._view.minifyContent) {
+      this._view.minifyContent( $te.attr("id"));
+    }
+  }
+  
 });
 Trillo.FileUploadC = Trillo.Controller.extend({
   
@@ -4347,7 +6266,17 @@ Trillo.FileUploadC = Trillo.Controller.extend({
     $.each(params, function(name, value) {
       $e.find('[nm="' + name + '"]').val(value);
     });
-    
+    if (!this.fileDDH) {
+      this.fileDDH = new Trillo.FileDragDropHandler({
+        parent: this,
+        $dde: $e.find('.js-file-drag-drop'),
+        $pb: $e.find('.js-progress-bar'),
+        folder: $e.find('[nm="folder"]').val(),
+        className: $e.find('[nm="className"]').val(),
+        targetViewName: $e.find('[nm="targetViewName"]').val(),
+        url: this.viewSpec.params.uploadUrl
+      });
+    }
   },
   fileSelected: function() {
     var s = this.$file.val(),
@@ -4355,7 +6284,9 @@ Trillo.FileUploadC = Trillo.Controller.extend({
         err = this.allowedFileTypes.indexOf(ext.toLowerCase()) < 0;
     this.$fileNameE.val(err ? "" : s);
     if (err) {
-      Trillo.alert.showError("Unsupported File Type", "Only '" + this.allowedFileTypes.join() + "' files are allowed.");
+      this.showFileUploadError("Unsupported File Type", "Only '" + this.allowedFileTypes.join() + "' files are allowed.");
+    } else {
+      this.clearFileUploadError();
     }
   },
   uploadFile : function(ev) {
@@ -4364,19 +6295,745 @@ Trillo.FileUploadC = Trillo.Controller.extend({
       ev.preventDefault();
     }
     if($.trim(this.$fileNameE.val()) === "") {
-      Trillo.alert.showError("Missing File", "Please choose a file from your computer to upload.");
+      this.showFileUploadError("Missing File", "Please choose a file from your computer to upload.");
       return;
     }
+    this.clearFileUploadError();
     Trillo.fileUploadForm = this;
     this.$elem().find('form')[0].submit();
   },
-  uploadFileCompleted : function(data) {
-    this.parent.fileSaved(data, this);
-  },
-  uploadFileFailed : function(s) {
-    Trillo.alert.showError("Error", s);
+  uploadFileCompletedViaXHR : function(data) {
+    var target = this.viewByName(data.targetViewName);
+    data.__viaxhr = true;
+    if (target) {
+      target.controller().fileUploadSuccessful(data);
+    }
   },
   postShow : function() {
     Trillo.alert.clear();
   }
 });
+
+Trillo.FileDragDropHandler = Class.extend({
+  initialize : function(options) {
+    this.parent = options.parent;
+    this.url = options.url;
+    this.$pb = options.$pb;
+    this.folder = options.folder;
+    this.className = options.className;
+    this.targetViewName = options.targetViewName;
+    var $dde = this.$dde = options.$dde;
+    var noop = $.proxy(this.noop, this);
+    $dde.on("dragenter", noop, false);
+    $dde.on("dragexit", noop, false);
+    $dde.on("dragover", noop, false);
+    $dde.on("drop", $.proxy(this.dropUpload, this));
+  },
+
+  noop : function(event) {
+    event.stopPropagation();
+    event.preventDefault();
+  },
+
+  dropUpload : function(event) {
+    this.noop(event);
+    this.$pb.addClass('trillo-upload-pb-notransition');
+    this.$pb.width("0%");
+    var files = event.originalEvent.dataTransfer.files;
+    var self = this;
+    setTimeout(function() {
+      self.$pb.removeClass('trillo-upload-pb-notransition');
+      for (var i = 0; i < files.length; i++) {
+        self.upload(files[i]);
+      }}, 100
+    );
+  },
+
+  upload : function(file) {
+    var acceptedTypes = {
+        'image/png': true,
+        'image/jpeg': true,
+        'image/gif': true
+      };
+    if (!acceptedTypes[file.type]) {
+      this.parent.showFileUploadError("Unsupported File Type", "Only '" + this.parent.allowedFileTypes.join() + "' files are allowed.");
+      return;
+    }
+    this.parent.clearFileUploadError();
+    this.$pb.parent().css("visibility", "visible");
+    this.$pb.css("visibility", "visible");
+    var formData = new FormData();
+    formData.append("xhr", "1");
+    formData.append("file", file);
+    formData.append("folder", this.folder);
+    formData.append("className", this.className);
+    formData.append("targetViewName", this.targetViewName);
+    var xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", $.proxy(this.uploadProgress, this), false);
+    xhr.addEventListener("load", $.proxy(this.uploadComplete, this),
+        false);
+    xhr.open("POST", this.url, true); // If async=false, then you'll miss progress bar support.
+    xhr.send(formData);
+  },
+
+  uploadProgress : function(event) {
+    // Note: doesn't work with async=false.
+    var progress = Math.round(event.loaded / event.total * 100);
+    this.$pb.width(progress + "%");
+  },
+
+  uploadComplete : function(event) {
+    var data = $.parseJSON(event.target.responseText);
+    if (data.error) {
+      this.$pb.width("0%");
+      this.parent.fileUploadFailed(data);
+    } else {
+      this.$pb.width("100%");
+      this.parent.uploadFileCompletedViaXHR(data);
+      
+    }
+  }
+
+});
+Trillo.makeDependencyList = function(layoutSpecs) {
+  
+  function _makeDependencyList(layoutSpecs) {
+    var l = layoutSpecs.slice(0);
+    var l2 = [];
+    var idx = 0;
+    while (true) {
+      var t = l[idx], t2;
+      var failed = false;
+      for (var i=0; i<l.length; i++) {
+        t2 = l[i];
+        if (t !== t2) {
+          if (dependsOn(t.id, t2)) {
+            failed = true;
+            break;
+          }
+        }
+      }
+      if (!failed) {
+        l2.push(t);
+        l.splice(idx, 1);
+        idx = 0;
+        if (l.length === 0) {
+          return l2;
+        }
+      } else {
+        if (failed && idx === l.length -1) {
+          return l2;
+        }
+        idx++;
+      }
+    }
+  }
+  
+  function _makeArray(str) {
+    if (!str) {
+      return [];
+    }
+    str = str.replace(/\s/g, "");
+    return str.split(",");
+  }
+
+  function dependsOn(id, t) {
+    if (t.top.indexOf(id) >= 0) return true;
+    if (t.bottom.indexOf(id) >= 0) return true;
+    if (t.left.indexOf(id) >= 0) return true;
+    if (t.right.indexOf(id) >= 0) return true;
+  }
+  
+  if (!layoutSpecs) {
+    return;
+  }
+  
+  for (var i=0; i<layoutSpecs.length; i++) {
+    var c = layoutSpecs[i];
+    c.top = _makeArray(c.top);
+    c.bottom = _makeArray(c.bottom);
+    c.left = _makeArray(c.left);
+    c.right = _makeArray(c.right);
+    c.pTop = 0;
+    c.pLeft = 0;
+  }
+  return _makeDependencyList(layoutSpecs);
+  
+
+};
+
+
+Trillo.positionContainers = function(layoutSpecs) {
+  
+  function _positionContainers(layoutSpecs) {
+    var $e, t, $e2;
+    for (var i=0; i<layoutSpecs.length; i++) {
+      t = layoutSpecs[i];
+      $e = $("#" + t.id);
+      if ($e.length === 0) {
+        continue;
+      }
+      _positionTop($e, t, layoutSpecs);
+      _positionBottom($e, t, layoutSpecs);
+      _positionLeft($e, t, layoutSpecs);
+      _positionRight($e, t, layoutSpecs);
+    }
+  }
+  
+  function _h($e) {
+    if ($e.css("visibility") === "hidden" || $e.css("display") === "none" || $e.hasClass("js-overlaid")) return 0;
+    return $e.outerHeight(true);
+  }
+  
+  function _w($e) {
+    if ($e.css("visibility") === "hidden" || $e.css("display") === "none" || $e.hasClass("js-overlaid")) return 0;
+    return $e.outerWidth(true);
+  }
+  
+  function _setTopPos(id, v, layoutSpecs) {
+    var t;
+    for (var i=0; i<layoutSpecs.length; i++) {
+      t = layoutSpecs[i];
+      if (t.id === id) {
+        t.pTop = v;
+      }
+    }
+  }
+  
+  function _setLeftPos(id, v, layoutSpecs) {
+    var t;
+    for (var i=0; i<layoutSpecs.length; i++) {
+      t = layoutSpecs[i];
+      if (t.id === id) {
+        t.pLeft = v;
+      }
+    }
+  }
+
+  function _positionTop($e, t, layoutSpecs) {
+    if (!t.top.length) {
+      return;
+    }
+    var p = $e.position();
+    var v = (t.pTop + _h($e));
+    var $e2;
+    for (var i=0; i<t.top.length; i++) {
+      _setTopPos(t.top[i], v, layoutSpecs);
+      $e2 = $("#" + t.top[i]);
+      $e2.css(($e2.css("position") == "fixed" ? "top" : "padding-top"), v + "px");
+    }
+  }
+
+  function _positionBottom($e, t, layoutSpecs) {
+    if (!t.bottom.length) {
+      return;
+    }
+    var v = $e.height();
+    var $e2;
+    for (var i=0; i<t.bottom.length; i++) {
+      $e2 = $("#" + t.bottom[i]);
+      $e2.css(($e2.css("position") == "fixed" ? "bottom" : "padding-bottom"), v + "px");
+    }
+  }
+
+  function _positionLeft($e, t, layoutSpecs) {
+    if (!t.left.length) {
+      return;
+    }
+    var p = $e.position();
+    var v = (t.pLeft + _w($e));
+    var $e2;
+    for (var i=0; i<t.left.length; i++) {
+      _setLeftPos(t.left[i], v, layoutSpecs);
+      $e2 = $("#" + t.left[i]);
+      $e2.css(($e2.css("position") == "fixed" ? "left" : "padding-left"), v + "px");
+    }
+  }
+
+  function _positionRight($e, t, layoutSpecs) {
+    if (!t.right.length) {
+      return;
+    }
+    var v = $e.width();
+    var $e2;
+    for (var i=0; i<t.right.length; i++) {
+      $e2 = $("#" + t.right[i]);
+      $e2.css(($e2.css("position") == "fixed" ? "right" : "padding-right"), v + "px");
+    }
+  }
+
+  if (layoutSpecs !== null) {
+    _positionContainers(layoutSpecs);
+  }
+};
+
+Trillo.Popover = Class.extend({
+  initialize : function(options) {
+    this.options = options;
+    this.clickM = $.proxy(this.clicked, this);
+    this.clickOutsideM = $.proxy(this.clickedOutside, this);
+    this.setup(options);
+    this.targetInfo = {};
+    this.contentInfo = {};
+  }, 
+  
+  setup: function(options) {
+    var $t, $ta, $c;
+    $ta = this.$target = options.$target && options.$target.length ? options.$target : null;
+    $c = this.$content = options.$content && options.$content.length ? options.$content : null;
+    if (!this.$target) {
+      // treat content as target
+      $ta = this.$target = this.$content;
+      $c = this.$content = null;
+    }
+    if (!$ta) {
+      // nothing to be done
+      return;
+    }
+    $t = this.$trigger = options.$trigger;
+    $t.on("click", this.clickM);
+    this.contentClass = this._getAttr($t, $ta, $c, "popover-class");
+    
+    this.hOffset = this._getNumericAttr($t, $ta, $c, "h-offset");
+    this.vOffset = this._getNumericAttr($t, $ta, $c, "v-offset");
+    this.alignment = this.getAlignment(this._getAttr($t, $ta, $c, "alignment"));
+    
+    this.$anchor = $ta.find(".js-popover-anchor");
+    if (this.$anchor.length === 0) {
+      this.$anchor = null;
+    }
+    this.anchorHOffset = this._getNumericAttr($t, $ta, $c, "anchor-h-offset");
+    this.anchorVOffset = this._getNumericAttr($t, $ta, $c, "anchor-v-offset");
+    
+    this.$close = $ta.find(".js-popover-close");
+    if (this.$close.length) {
+      this.closeClickM = $.proxy(this.closeClicked, this);
+      this.$close.on("click", this.closeClickM);
+    }
+   
+    this.$contentNext = null;
+  },
+  
+  clear: function() {
+    this.$trigger.off("click", this.clickM);
+    if (this.closeClickM) {
+      this.$close.off("click", this.closeClickM);
+    }
+    $(document).off("click", this.clickOutsideM);
+  },
+  
+  clicked: function() {
+    if (this.isHidden()) {
+      this._show();
+    } else {
+      this._hide();
+    }
+  },
+  
+  clickedOutside: function(ev) {
+    if (!$.contains(this.$target[0], ev.target)) {
+      this.hide();
+    }
+  },
+  
+  closeClicked: function() {
+    this.hide();
+  },
+  
+  show: function() {
+    if (this.isHidden()) {
+      this._show();
+    }
+  },
+  
+  hide: function() {
+    if (!this.isHidden()) {
+      this._hide();
+    }
+  },
+  
+  _show: function() {
+    if (!this.$target) {
+      return;
+    }
+    Trillo.popoverManager.hideCurrentPopup();
+    Trillo.popoverManager.currentPopup = this;
+    var $te = this.$trigger;
+    var $ta = this.$target;
+    var $c = this.$content;
+    var $a = this.$anchor;
+    var al = this.alignment;
+    if ($c) {
+      this.$oldParent = $c.parent();
+      this.$contentNext = $c.next();
+      if (this.contentClass) {
+        $c.addClass(this.contentClass);
+      }
+      $ta.append($c);
+    }
+    
+    this.saveStylesInfo($ta, this.targetInfo);
+    
+    if (this.targetInfo.hasHideClass) {
+      $ta.removeClass("hide");
+    } else if (this.targetInfo.displayStyle === "none") {
+      $ta.show();
+    }
+    if (this.targetInfo.visibilityStyle === "hidden") {
+      $ta.css("visibility", "visible");
+    }
+    if (this.targetInfo.hasTrilloHiddenClass) {
+      $ta.removeClass("trillo-hidden");
+    }
+    
+    if ($c) {
+      this.saveStylesInfo($c, this.contentInfo);
+      if (this.contentInfo.hasTrilloHiddenClass) {
+        $c.removeClass("trillo-hidden");
+      }
+    }
+    
+    // al null means that no alignment specified and target should not be positioned
+    if (al) {
+      var pos = this.getPosition($te, $ta, al, this.hOffset, this.vOffset);
+      $ta.offset(pos);
+      if ($a) {
+        var apos = this.getPosition($te, $a, al, this.anchorHOffset, this.anchorVOffset);
+        this.adjustPos($ta, $a, pos, apos, al);
+        $a.css({left: apos.left + "px", top: apos.top + "px"}); // relative to $ta
+        $ta.offset(pos);
+      }
+    }
+    var self = this;
+    setTimeout(function() {
+        $(document).on("click", self.clickOutsideM);
+    }, 0);
+  },
+  
+  adjustPos: function($ta, $a, pos, apos, al) {
+    // position of target is adjusted.
+    // position of anchor is computer relative to target
+    var w = $ta.outerWidth();
+    var h = $ta.outerHeight();
+    var wa = $a.outerWidth();
+    var ha = $a.outerHeight();
+    if (al.v === "t") {
+      pos.top -= ha;
+      apos.top = h + ha;
+      apos.left -= pos.left;
+    } else if (al.v === "b" || al.v === "m") {
+      pos.top += ha;
+      apos.top = -ha;
+      apos.left -= pos.left;
+    }
+  },
+  
+  _hide: function() {
+    if (!this.$target) {
+      return;
+    }
+    var $c = this.$content;
+    if (this.$oldParent) {
+      var $cn = this.$contentNext;
+      if ($cn && $cn.length) {
+        $c.insertBefore($cn);
+      } else {
+        this.$oldParent.append($c);
+      }
+    }
+    if ($c && this.contentClass) {
+      $c.removeClass(this.contentClass);
+    }
+    this.restoreStylesInfo(this.$target, this.targetInfo);
+    if ($c && this.contentInfo.hasTrilloHiddenClass) {
+      $c.addClass("trillo-hidden");
+    }
+    $(document).off("click", this.clickOutsideM);
+  },
+  
+  getPosition: function($t, $e, al, hOffset, vOffset) {
+    var offset = $t.offset();
+    var w = $t.outerWidth();
+    var h = $t.outerHeight();
+    var ew = $e.outerWidth();
+    var eh = $e.outerHeight();
+    var ww = $(window).width();
+    var wh = $(window).height();
+    console.log(offset, w, h, ew, eh);
+    var top = offset.top;
+    var left = offset.left;
+    if (al.h === "r") {
+      left += w - ew;
+    } else if (al.h === "c") {
+      left += (w - ew) / 2;
+    } else {
+      if (al.v === "r") {
+        left += w;
+      } else if (al.v === "l") {
+        left -= ew;
+      }
+    }
+    if (al.v === "t") {
+      top -= $e.outerHeight();
+    } else if (al.v === "b") {
+      top += h;
+    } else if (al.v === "m") {
+      top += h/2;
+    } else {
+      if (al.h === "b") {
+        top += h;
+      } else if (al.h === "m") {
+        top += (h - eh) / 2;
+      }
+    }
+    if (al.h === "r" || al.h === "l" || al.h === "c") {
+      if (left + ew > ww) {
+        left -= ww - (left-ew);
+      }
+      if (left < 0) {
+        left = 0;
+      }
+    }
+    left += hOffset;
+    top += vOffset;
+    return {left: left, top: top};
+  },
+  
+  getAlignment: function(alignment) {
+    if (!alignment) {
+      alignment = "b-c";
+    } else {
+      alignment = alignment.toLowerCase();
+    }
+    if (alignment === "none") {
+      return null;
+    }
+    var arr = alignment.split("-");
+    return {
+      v: arr[0] ? arr[0] : 'b',
+      h: arr[1] ? arr[1] : 'c'
+    };
+  },
+  
+  isHidden: function() {
+    var $ta = this.$target;
+    if (!$ta.is(":visible")) return true;
+    var offset = $ta.offset();
+    return offset.left + $ta.outerWidth() < 0 || offset.top + $ta.outerHeight() < 0;
+  },
+  
+  saveStylesInfo: function($e, info) {
+    info.hasHideClass = $e.hasClass("hide");
+    info.displayStyle = $e.css("display");
+    info.visibilityStyle = $e.css("visibility");
+    info.hasTrilloHiddenClass = $e.hasClass("trillo-hidden");
+    info.offset = $e.offset();
+  },
+ 
+  restoreStylesInfo: function($e, info) {
+    if (info.hasHideClass) {
+      $e.addClass("hide");
+    } else if (info.displayStyle === "none") {
+      $e.css("display", "none");
+    }
+    if (info.visibilityStyle === "hidden") {
+      $e.css("visibility", "hidden");
+    }
+    if (info.hasTrilloHiddenClass) {
+      $e.addClass("trillo-hidden");
+    }
+    if (this.alignment && info.offset) {
+      $e.css({left: info.offset.left + "px", top: info.offset.top + "px"});
+    }
+  },
+  
+  _getAttr: function($te, $ta, $c, attrName) {
+    // look for attribute in $c followed by $ta and last in $te
+    var v;
+    if ($c) {
+      v = $c.dataOrAttr(attrName);
+      if (v) return v;
+    }
+    v = $ta.dataOrAttr(attrName);
+    if (v) return v;
+    return $te.dataOrAttr(attrName);
+  },
+  
+  _getNumericAttr: function($te, $ta, $c, attrName) {
+    var v = parseInt(this._getAttr($te, $ta, $c, attrName), 10);
+    if (!Trillo.isNumeric(v)) {
+      v = 0;
+    }
+    return v;
+  }
+});
+
+Trillo.PopoverManager = Class.extend({
+  initialize : function() {
+    this.currentPopup = null;
+    this.popovers = [];
+  },
+  
+  createPopoverForContent: function($c) {
+    var t = $c.dataOrAttr("trigger");
+    if (t) {
+      return this.createPopoverForTrigger($(t), $c);
+    }
+    return null;
+  },
+  
+  createPopoverForTrigger: function($te, $c) {
+    var t = $te.dataOrAttr("target");
+    var $ta = t ? $(t) : null;
+    if (!$c) {
+      var c = $te.dataOrAttr("content");
+      $c = c ? $(c) : null;
+    }
+    if (!$ta && $c) {
+      t = $c.dataOrAttr("target");
+      $ta = t ? $(t) : null;
+    }
+    if ($ta || $c) {
+      return this._createPopover($te, $ta, $c);
+    }
+    return null;
+  },
+  
+  _createPopover: function($te, $ta, $c) {
+    var popover = new Trillo.Popover({
+      $trigger: $te,
+      $target: $ta,
+      $content: $c
+    });
+    this.popovers.push(popover);
+    return popover;
+  },
+  
+  showPopup: function(popup) {
+    this.currentPopup = popup;
+    popup.show();
+  },
+  
+  hideCurrentPopup: function() {
+    if (this.currentPopup) {
+      this.currentPopup.hide();
+    }
+  },
+  
+  getPopoverForTrigger: function($te) {
+    for (var i=0; i<this.popovers.length; i++) {
+      if (this.popovers[i].$trigger[0] === $te[0]) {
+        return this.popovers[i];
+      }
+    }
+  },
+  
+  getPopoverForContent: function($c) {
+    for (var i=0; i<this.popovers.length; i++) {
+      if (this.popovers[i].$content) {
+        if (this.popovers[i].$content[0] === $c[0]) {
+          return this.popovers[i];
+        }
+      } else if (this.popovers[i].$target && this.popovers[i].$target[0] === $c[0]) {
+        return this.popovers[i];
+      }
+    }
+    return null;
+  },
+  
+  hasContent: function($te) {
+    var p = this.getPopoverForTrigger($te);
+    if (p) {
+      var $c = p.$content || p.$target;
+      if ($c && $c.children(':visible').length > 0) {
+        return true;
+      }
+    }
+    return false;
+  },
+  
+  contentCleared: function($c) {
+    var p = this.getPopoverForContent($c);
+    if (p) {
+      p.$trigger.addClass("trillo-trigger-has-no-content");
+    }
+  },
+  
+  contentShown: function($c) {
+    var p = this.getPopoverForContent($c);
+    if (p) {
+      p.$trigger.removeClass("trillo-trigger-has-no-content");
+    }
+  },
+  
+  // hides current popup if $c is contained inside it
+  hideCurrentPopupIfContains: function($c) {
+    if (this.currentPopup && $.contains(this.currentPopup.$target[0], $c[0])) {
+      this.hideCurrentPopup();
+    }
+  }
+});
+Trillo.MultiViewDelegator = Class.extend({
+  initialize : function(options) {
+    this.options = options;
+    this.tblByTarget = {};
+    this.sourceViews = {};
+  },
+  
+  manage: function($e, view) {
+    var self = this;
+    var tt = this.tblByTarget;
+    var nm;
+    var el;
+    var names = {};
+    var view2;
+    var source = view.name;
+    this.unManage(source); // unmanage previous elements
+    if (!Trillo.belongsToView($e, source)) {
+      return;
+    }
+    $e.data("for-view", source);
+    this.sourceViews[source] = $e;
+    $e.find("[target-view], [data-target-view]").each(function() {
+      nm = $(this).dataOrAttr("target-view");
+      el = tt[nm];
+      if (!el) {
+        tt[nm] = el = [];
+      }
+      el.push({e: this, source: source});
+      if (!names[nm]) {
+        names[nm] = true;
+      }
+    });
+    $.each(names, function(nm, v) {
+      view2 = view.controller().viewByName(nm);
+      if (view2) {
+        view2.applyExternalElements(self.getByTarget(nm));
+      }
+    });
+  },
+  
+  unManage: function(source) {
+    if (this.sourceViews[source]) {
+      var el;
+      var el2;
+      var tbl = this.tblByTarget;
+      var i;
+      $.each(tbl, function(nm, el) {
+        el2 = [];
+        for (i=0; i<el.length; i++) {
+          if (el[i].source !== source) {
+            el2.push(el[i]);
+          } 
+        }
+        tbl[nm] = el2;
+      });
+    }
+  },
+  
+  getByTarget: function(nm) {
+    return this.tblByTarget[nm];
+  }
+});
+  
+  

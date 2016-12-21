@@ -12,17 +12,15 @@
 <link rel="stylesheet" href="lib/css/bootstrap.css" type="text/css" />
 <link rel="stylesheet" href="lib/css/bootstrap-theme.css" type="text/css" />
 <link rel="stylesheet" href="css/trillo.css" type="text/css" />
-<link rel="stylesheet" href="css/trillo-view.css" type="text/css" />
+<link rel="stylesheet" href="css/trillo-all.css" type="text/css" />
 <link rel="stylesheet" href="css/todo-list.css" type="text/css" />
 
 <body>
 
   <script spec="view" type="application/json">
     {
-      "ToDo" : {
-        "modelSpec" : { },
-        "nextView" : "ToDoList"
-      }
+      "name" : "ToDo",
+      "nextView" : "ToDoList"
     }
   </script>
     
@@ -57,7 +55,7 @@
         <li><a href="https://github.com/trillo/trillojs"> TrilloJS on GitHub</a></li>
         </ul>
       </div>
-      <div style="visiblity: hidden" class="trillo-busy-indicator progress js-busy-indicator">
+      <div style="visibility: hidden" class="trillo-busy-indicator progress js-busy-indicator">
 	    <div class="progress-bar progress-bar-striped active js-progress-bar" aria-valuenow="100" aria-valuemin="0"
 	      aria-valuemax="100" style="width: 100%">
       </div>

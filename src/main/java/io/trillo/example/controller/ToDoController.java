@@ -23,17 +23,17 @@ import io.trillo.example.entity.Task;
 @Controller
 public class ToDoController {
 
-  @RequestMapping(value = "/taskList", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequestMapping(value = {"/todo/taskList", "/taskList"}, method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
   public @ResponseBody List<Task> getView() {
     return MemoryDataSource.getInstance().getTaskList();
   }
   
-  @RequestMapping(value = "/newTask", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequestMapping(value = {"/todo/newTask", "/newTask"}, produces = MediaType.APPLICATION_JSON_VALUE)
   public @ResponseBody Result newUser(@RequestBody @Valid  Task task, BindingResult bindingRes) {
     return MemoryDataSource.getInstance().addNewTask(task.getTaskName(), task.getPriority());
   }
   
-  @RequestMapping(value = "/updateCompleted", produces = MediaType.APPLICATION_JSON_VALUE)
+  @RequestMapping(value = {"/todo/updateCompleted", "/updateCompleted"}, produces = MediaType.APPLICATION_JSON_VALUE)
   public @ResponseBody Result updateCompleted(@RequestParam(required = true, value = "uid") String uid,
       @RequestParam(required = true, value = "completed") boolean completed) {
     return MemoryDataSource.getInstance().completeTask(uid, completed);

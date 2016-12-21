@@ -1,0 +1,1743 @@
+/*!
+ * TrilloJS v0.5.0 (https://github.com/trillo/trillojs#readme)
+ * Copyright 2016 Collager Inc.
+ * Licensed under the MIT license
+ */
+/* role css */
+
+.trillo-role-dev, .trillo-role-admin, .trillo-role-user, .trillo-role-signed-guest {
+  visibility: hidden;
+}
+
+.user-trillo-role-admin .trillo-role-admin,
+.user-trillo-role-admin .trillo-role-dev, 
+.user-trillo-role-admin .trillo-role-user,
+.user-trillo-role-admin .trillo-role-signed-guest {
+  visibility: visible;
+}
+
+.user-trillo-role-dev .trillo-role-dev,
+.user-trillo-role-dev .trillo-role-user,
+.user-trillo-role-dev .trillo-role-signed-guest {
+  visibility: visible;
+}
+
+.user-trillo-role-user .trillo-role-user,
+.user-trillo-role-user .trillo-role-signed-guest {
+  visibility: visible;
+}
+
+.user-trillo-role-signed-guest .trillo-role-signed-guest {
+  visibility: visible;
+}
+
+.user-trillo-role-none .trillo-on-valid-role {
+  display: none !important;
+}
+
+.trillo-on-not-loggedin {
+  display: none !important;
+}
+
+.user-trillo-role-none .trillo-on-not-loggedin {
+  display: inline-block !important;
+}
+
+.trillo-role-admin-only,
+.trillo-role-dev-only, 
+.trillo-role-user-only,
+.trillo-role-signed-guest-only,
+.user-trillo-role-none-only {
+  display: none !important;
+}
+
+
+.user-trillo-role-admin .trillo-role-admin-only {
+  display: block !important;
+}
+
+.user-trillo-role-dev .trillo-role-dev-only {
+  display: block !important;
+}
+
+.user-trillo-role-user .trillo-role-user-only {
+  display: block !important;
+}
+
+.user-trillo-role-signed-guest .trillo-role-signed-guest-only {
+  display: block !important;
+}
+
+.user-trillo-role-none .trillo-role-none-only {
+  display: block !important;
+}
+
+/* role css ends */
+/* c3 overrides */
+
+.c3-tooltip th {
+  background-color: #000;
+  font-size: 11px;
+  padding: 3px 10px;
+  text-align: left;
+  color: #FFF;
+}
+
+.c3-tooltip td {
+  font-size: 11px;
+  padding: 3px 10px;
+  background-color: #fff;
+  border-left: 1px dotted #999;
+}
+
+.c3-tooltip td:first-child {
+  border-left-width: 0px;
+}
+
+.c3 svg {
+  font-family: inherit;
+}
+
+.c3-axis-x-label, .c3-axis-y-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.c3-chart-arc text {
+  font-size: 10px;
+}
+
+.c3-tooltip tr {
+  border-width: 0px;
+  border-bottom: 1px solid #CCC;
+}
+
+.c3-tooltip tr:last-child {
+  border-bottom-width: 0px;
+}
+
+.c3-tooltip {
+  border-width: 0px;
+}
+
+.c3-tooltip-container {
+  border: 1px solid #333;
+  border-radius: 2px;
+  padding-bottom: 1px;
+}
+
+/* The following CSS is applied to an element when it becomes invisible due to 
+   view-port size (for example a responsive navigation bar collapses when view-port
+   is smaller. 
+*/
+
+.trillo-hidden {
+  visibility: hidden;
+}
+
+/* The following CSS class is applied to a container element when it has no content. 
+   It is different from "trillo-hidden" which is applied on a responsive element.
+*/
+
+.trillo-cleared {
+  
+}
+
+/* Style used to remove something from the user view still be rendered in the 
+   background 
+*/
+ 
+.trillo-position-outside {   
+  position: absolute;
+  left: -1000px;
+  top: 10x;
+}
+
+/* Used to show something as receded, for example when a modal dialog is 
+   shown the main panel is receded. 
+*/
+
+.trillo-content-receded {
+  position: fixed;
+  opacity: 0.5;
+  width: 100%;
+}
+
+/* Until application is ready, templates and model data are mixed-in, certain 
+   elements such as with mustache template may be kept invisible. They will be 
+   made visible once application is ready. When the application is ready, framework
+   adds a class called trillo-app-ready to body. */
+   
+.trillo-on-app-ready {
+  visibility: hidden;
+}
+
+.trillo-app-ready .trillo-on-app-ready  {
+  visibility: visible; 
+}
+
+.trillo-sortable {
+  cursor: pointer;
+}
+
+
+.trillo-clearfix:before,
+.trillo-clearfix:after {
+  display: table;
+  content: " ";
+}
+
+.trillo-clearfix:after {
+  clear: both;
+}
+
+/* Canvas */
+
+.trillo-canvas {
+  position: relative;
+}
+
+/* Hiding and showing editable part of a cell in the table */
+.trillo-on-edit-cell {
+  display: none;
+}
+
+.trillo-editable .trillo-on-edit-cell {
+  display : table-cell; 
+}
+
+/* Flex grid */
+.trillo-flex-grid {
+  position: relative;
+}
+
+
+/* Page */
+.trillo-root-elem {
+	height: 100%;
+}
+
+.trillo-application {
+  height: auto !important;
+  min-height: 100%;
+  height: 100%;
+}
+
+
+
+
+/* text alignment, styling */
+
+.trillo-text-left {
+  text-align: left;
+}
+.trillo-text-right {
+  text-align: right;
+}
+.trillo-text-center {
+  text-align: center;
+}
+.trillo-text-justify {
+  text-align: justify;
+}
+.trillo-text-nowrap {
+  white-space: nowrap;
+}
+.trillo-text-lowercase {
+  text-transform: lowercase;
+}
+.trillo-text-uppercase {
+  text-transform: uppercase;
+}
+.trillo-text-capitalize {
+  text-transform: capitalize;
+}
+
+/* Used to style a global progress indicator
+ * It displays the progress of an action that is applicable
+ * the current view or current selection (such as a selected object of table or detail view of the object) */
+ 
+.trillo-global-progress-indicator {
+  background-color: #ffffff;
+  border: 1px solid #cccdcc;
+  font-size: 11px;
+  text-align: center;
+  width: 200px;
+  left: 100%;
+  top: 70px;
+  position: fixed;
+  margin-left: -200px;
+  z-index: 500000;
+}
+
+/* Used to style the progress of a task, process or action on the 
+ * selected object or specific context. This is an indicator that is close to the object such as
+ * a column of a row or top of the selected cell. It is one per object / context. */
+ 
+.trillo-object-progress-indicator {
+  background-color:#ffffff;
+  border: 1px solid #cccdcc;
+  width: 90%;
+  font-size: 11px;
+  text-align:center;
+  position: absolute;
+  margin:-40px 5% 0px;
+  padding: 5px;
+}
+
+/** Shows a busy indicator near the top right of the page */
+
+.trillo-busy-indicator {
+  width: 50px;
+  height: 8px;
+  left: 100%;
+  top: 60px;
+  margin-left: -60px;
+  position: fixed;
+  z-index: 500000;
+}
+
+/* Shows a spinner in the middle of a page */
+
+.trilo-page-load-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin-left: -27px;
+  margin-top: -21px;
+  z-index: 1000;
+}
+
+/* Use for displaying <page number> of <total page>. 
+It is shown at the right bottom of a large collection view. */
+
+.trillo-pagination {
+  background-color: #787878;
+  bottom: 0;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 13px;
+  opacity: 0.5;
+  padding: 2px;
+  position: fixed;
+  right: 0;
+  text-align: center;
+  min-width: 60px;
+  z-index: 1050;
+}
+
+/* Style of the alert shown close to the top bar. */
+
+.trillo-alert-c {
+  position: fixed;
+  z-index:40010;
+  width: 100%;
+  top: 5px;
+}
+
+.trillo-alert {
+  max-width: 600px;
+  width: 90%;
+  z-index:400010;
+  left:0;
+  top:100%;
+  margin-top: 2px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Horizontal toolbar on top, changes to pop-over on smaller size viewports. */
+
+.trillo-toolbar-c {
+  background-color: #f2f2f2;
+  position: fixed;
+  z-index: 1003;
+  border: 1px solid #dadada;
+}
+
+.trillo-toolbar {
+  background-color: #f2f2f2;
+  margin: 0px 10px;
+}
+
+.trillo-toolbar-inner {
+  padding: 0px 5px;
+}
+
+.trillo-toolbar-inner > div {
+  float: left;
+  margin: 5px 5px 5px 0px;
+}
+  
+.trillo-toolbar-inner .btn-group .btn {
+  float: none;
+}
+
+.trillo-toolbar-toggle {
+  padding: 0px 10px;
+  background-color: transparent;
+  background-image: none;
+  border-width: 0px;
+  margin: 2px 0;
+  font-size: 30px;
+  line-height: 30px;
+  color: #a2a2a2;
+}
+
+.trillo-toolbar-toggle:focus {
+  outline: 0;
+}
+
+/* Dialog. */
+
+.trillo-dialog-backdrop {
+  position: fixed;
+  top: 0px;
+  left: 0px;
+  right: 0px;
+  bottom: 0px;
+  background-color: #787878;
+  opacity: 0.3;
+  z-index: 1999;
+}
+
+.trillo-dialog {
+  background-color: #FFFFFF;
+  border: 1px solid #CCCCCC;
+  min-width: 300px;
+  padding: 0px 20px 20px;
+  top: 60px;
+  z-index: 2000;
+  position: absolute;
+  display: none;
+  margin-bottom: 10px;
+}
+
+.trillo-dialog-container-shown .trillo-dialog {
+  display: block;
+}
+
+
+.trillo-dialog-button-group {
+  padding: 10px 0px;
+  text-align: center;
+}
+
+/* Dialog that can show scrollable content. */
+
+.trillo-scroll-dialog {
+  width: 80%;
+  left:10%;
+  position: absolute;
+  background-color: #f2f2f2;
+  z-index: 1100;
+  border: 2px solid #787878;
+  overflow:hidden;
+  bottom: 30px;
+  padding:10px;
+  height: 70%;
+  top: 15%;
+  display:none;
+}
+
+.trillo-scroll-dialog-inner {
+  overflow-y: auto;
+  background-color: #ffffff;
+}
+
+.trillo-scroll-dialog-container-shown .trillo-scroll-dialog {
+  display: block;
+}
+
+/* Style for span that is shown as message below field (as help or error message). */
+
+.trillo-field-msg {
+  font-size: 10px;
+  line-height: 1.1em;
+  display:none;
+  margin-top: 1px;
+  float: right;
+}
+
+.trillo-has-error .trillo-field-msg {
+  display: block;
+}
+
+.trillo-has-message .trillo-field-msg {
+  display: block;
+}
+
+/* tree */
+ 
+.trillo-tree-container-container {
+    height: 100%;
+    position: relative;
+}
+
+.trillo-tree-container {
+    color: #222222;
+    height: 100%;
+    overflow: hidden;
+    width: 240px;
+}
+
+/* Use this when using non-native scrollbar. */
+.trillo-tree-container2 {
+    color: #222222;
+    width: 240px;
+}
+
+
+.trillo-tree-container a:link {
+  color:#222222;
+}
+
+.trillo-tree-container a:visited {
+  color:#222222;
+}
+
+.trillo-tree {
+  width:218px
+}
+
+.trillo-tree .trillo-tree-item {
+   background-position: 0px 50%;
+   background-repeat: no-repeat;
+   cursor:pointer;
+   padding:1px 1px 1px 1px;
+   border: 1px solid transparent;
+   overflow: hidden;
+   text-overflow: ellipsis;
+}
+
+.trillo-tree .trillo-item-close.trillo-tree-item {
+  
+}
+
+.trillo-tree .trillo-item-open.trillo-tree-item {
+  
+}
+
+.trillo-tree .lvl0 div .trillo-item-close.trillo-tree-item:before {
+  content: "\f054";
+  padding-right: 4px;
+  font-family:FontAwesome;
+  color: #787878;
+  font-size: 0.6em;
+  vertical-align: top;
+  display: inline-block;
+  margin-top: 0.2em;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl0 div .trillo-item-open.trillo-tree-item:before {
+  content: "\f078";
+  padding-right: 4px;
+  font-family:FontAwesome;
+  color: #787878;
+  font-size: 0.6em;
+  vertical-align: top;
+  display: inline-block;
+  margin-top: 0.2em;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl0 div .trillo-item-open.trillo-tree-item.trillo-selected:before {
+  color: #ffffff;
+}
+
+.trillo-tree-item-tn {
+  text-align: center;
+  margin:auto;
+  width:175px;
+  margin-bottom:15px;
+  padding:4px;
+  border: 1px dotted transparent;
+}
+
+
+.trillo-tree-item-tn img {
+  border:6px solid #ffffff;
+  width:165px;
+  box-shadow: 0 1px 3px #cccccc;
+}
+
+.trillo-tree .trillo-tree-item-tn.trillo-selected  {
+  background-color: transparent;
+  border=style: dotted;
+  border-width: 3px;
+}
+
+.trillo-tree .trillo-tree-item-tn.trillo-selected  img {
+  
+}
+
+.trillo-tree-item-tn .trillo-tn-label {
+  padding:10px 0px 0px;
+  font-weight:bold;
+}
+
+/* lvl0, lvl1 etc. are added to nodes of the tree depending on the depth of the nodes in the tree. */
+.lvl0 > .trillo-tree-item {
+  font-weight: bold;
+  margin-bottom:5px;
+  padding:3px;
+}
+
+.trillo-tree .lvl0:first-child {
+  /* border-top:1px solid #cccccc; */
+}
+
+.trillo-tree .lvl0 {
+ padding:15px 10px 5px 0px;
+ font-size: 17px;
+ margin-left:15px;
+ border-bottom:1px solid #cccccc;
+ line-height: 100%;
+}
+
+.trillo-tree .lvl0.no-border {
+  border-width: 0px;
+}
+
+.trillo-tree .lvl1 {
+  font-size:15px;
+  padding:8px 0px 8px 16px;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl2 {
+  font-size: 13px;
+  padding:6px 0px 0px 10px;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl3 {
+  font-size:11px;
+  padding:4px 0px 0px 5px;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl4 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl5 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+  line-height: 100%;
+}
+.trillo-tree .lvl6 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+  line-height: 100%;
+}
+
+.trillo-tree .lvl7 {
+  font-size:10px;
+  padding:4px 0px 0px 5px;
+  line-height: 100%;
+}
+
+.trillo-tree .odd {
+ background-color:#dddddd; 
+}
+
+.trillo-tree .even {
+ background-color:#ffffff; 
+}
+
+.trillo-tree .trillo-selected  {
+  background-color: #ff9933;
+  color: #fff;
+}
+
+.trillo-tree-action-item {
+  color:#4C88BE;
+}
+
+
+/* Tabular view rendered using absolute positioning */
+
+.trillo-list-header {
+  width: 100%;
+  background-color: #f2f2f2;
+  margin: 0px;
+  position:fixed;
+  z-index: 1000;
+  border:1px solid #cccccc;
+  height:38px;
+}
+
+.trillo-list-row {
+  width: 100%;
+  border:1px solid #cccccc;
+  min-height:27px;
+  border-top-width: 0px;
+  position: absolute;
+}
+
+.trillo-list-row.trillo-selected {
+  border:1px solid #cccccc;
+  border-top-width: 0px;
+  background-color:#eeeeee;
+  margin: 0px;
+}
+
+.trillo-inner-list {
+  margin: 10px 0px;
+}
+
+.trillo-inner-list .trillo-list-row {
+  position: static;
+}
+  
+.trillo-inner-list .trillo-list-header {
+  position: static;
+}
+
+/* Header and rows for the tabular view rendered using HTML table element. */
+
+.trillo-header-c {
+  display:inline-block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-left: 1px solid #aaaaaa;
+  padding:10px;
+  overflow: hidden;
+  font-weight:bold;
+  margin:0px -5px 0px 0px;
+  line-height: 16px;
+}
+
+.trillo-header-c:first-child {
+  border-left-width: 0px;
+}
+
+.trillo-content-c {
+  display:inline-block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-left: 1px solid #aaaaaa;
+  padding:0px 10px;
+  overflow: hidden;
+  margin:0px -5px 0px 0px;
+  line-height: 16px;
+}
+
+.trillo-content-c input:not([type='checkbox']), .trillo-content-c select {
+    width: 100%;
+    border: 1px solid #dddddd;
+    padding: 0px 5px;
+}
+
+.trillo-content-c:first-child {
+  border-left-width: 0px;
+}
+
+.trillo-content-c input[type="radio"], .trillo-content-c input[type="checkbox"] {
+  margin: 0px;
+}
+
+/* Info grid view. */
+
+.trillo-info-block {
+  position: absolute;
+  width: 150px;
+  border: 1px solid #d8d8d8;
+  margin:10px;
+  cursor: pointer;
+  position: absolute;
+  background-color: #f8f8f8;
+}
+
+.trillo-selected.trillo-info-block {
+  border: 4px solid #ff9933;
+  margin-top:7px;
+  margin-left:7px;
+}
+
+.trillo-info-block-tools {
+  position: absolute;
+  z-index: 100;
+  top:5px;
+  left: 10px;
+}
+
+.trillo-info-block .trillo-info-block-title {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 5px 10px;
+  text-align: center;
+  background-color: #ffffff;
+}
+
+.trillo-info-block .trillo-info-block-name {
+  font-size: 11px;
+  font-weight: bold;
+  padding: 5px 0px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trillo-info-block .trillo-info {
+  font-size: 10px;
+  border-top: 1px dashed #dddddd;
+  padding: 8px 10px;
+}
+
+
+/* From */
+
+.trillo-form-container {
+  padding-top: 1px; /* to avoid margin collapse */
+}
+
+.trillo-form-title {
+  color: #666;
+  font-size: 36px;
+  margin: 20px 0px;
+}
+
+.trillo-has-form-footer .trillo-form-container-inner {
+  border-bottom-width: 0;
+  padding-bottom: 0;
+}
+
+.trillo-form-container-inner {
+  background-color: #FFFFFF;
+  border: 1px solid #DDDDDD;
+  margin: 19px auto 0;
+  padding: 0 20px;
+  width: 320px;
+}
+
+.trillo-form-container-inner-footer {
+  -moz-border-bottom-colors: none;
+  -moz-border-left-colors: none;
+  -moz-border-right-colors: none;
+  -moz-border-top-colors: none;
+  background-color: #EEEEEE;
+  border-color: #DDDDDD;
+  border-image: none;
+  border-right: 1px solid #DDDDDD;
+  border-style: solid;
+  border-width: 0 1px 1px;
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0 auto 20px;
+  padding: 20px;
+  width: 320px;
+}
+
+/* Detail view - read only view of name and value pairs + any other HTML. */
+
+.trillo-dv {
+  padding: 1px 20px;
+}
+
+.trillo-dv-narrow {
+  padding: 1px 20px;
+  width: 350px;
+}
+
+.trillo-dv-group-c {
+  float:left;
+  margin:10px;
+}
+
+.trillo-dv-group-c-nested .trillo-dv-group-c {
+  float: none;
+  margin:10px 0px 0px;
+  width: 100%;
+}
+
+.trillo-dv-group {
+  border: 1px solid #cccccc;
+}
+
+.trillo-dv-group-c-nested .trillo-dv-group {
+  border: 0px solid #cccccc;
+}
+.trillo-dv-group-title {
+    color: #666;
+    font-size: 18px;
+    padding: 11px;
+    background-color:#f2f2f2;
+}
+
+.trillo-dv-group-c-nested .trillo-dv-group-title {
+  font-size: 15px;
+}
+
+.trillo-dv-field-label {
+  padding:7px 5px 7px 15px;
+}
+
+.trillo-dv-field-value {
+  padding:7px 15px 7px 25px;
+}
+
+.trillo-dv-bordered-group {
+  border-spacing: 5px;
+  border-collapse: separate;
+}
+
+.trillo-dv-bordered-group  .trillo-dv-field-value {
+  padding:3px 5px;
+  min-width: 200px;
+  border: 1px solid #cccccc;
+}
+
+.trillo-dv-bordered-group  .trillo-dv-group {
+  border: 0px solid #cccccc;
+}
+
+/* Upload form. */
+
+.trillo-upload-form-c {
+  padding:10px 30px;
+}
+
+.trillo-upload-form-group-c {
+  position: relative; 
+  height: 32px
+}
+
+.trillo-upload-form .trillo-file {
+  position:absolute; 
+  top:0px; 
+  left:0px; 
+  height:30px; 
+  width:290px; 
+  z-index:2; 
+  opacity:0; 
+  -moz-opacity:0; 
+  filter: alpha(opacity=1); 
+}
+
+.trillo-upload-form .trillo-file-name {
+  z-index:1; 
+  margin-bottom:0px;
+  width:190px;
+  height:30px;
+}
+
+.trillo-upload-form .trillo-choose-button {
+  z-index:1; 
+  margin-bottom:0px;
+  width:100px;
+}
+
+.trillo-upload-form  .trillo-upload-file{
+  z-index:3; 
+  margin:18px 0px 0px 0px;
+}
+
+.trillo-upload-form .trillo-upload-dragdrop-box {
+  margin:10px 0px 1px;
+  width:100%;
+  height: 100px;
+  border:1px solid #c2c2c2; 
+  border-radius: 4px;
+  background-color: #dddddd;
+  font-size:15px;
+  line-height: 18px;
+  padding: 41px 10px 0;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.trillo-upload-form .trillo-upload-dragdrop-box:hover {
+  background-color: #f2f2f2;
+}
+
+.trillo-upload-form .trillo-upload-dragdrop-box-separator {
+  margin: 20px 0px; 
+  border-top: 1px solid #aaaaaa; 
+  width: 100%; 
+  height: 1px
+}
+
+.trillo-upload-pb-notransition {
+  -webkit-transition: none !important;
+  -moz-transition: none !important;
+  -o-transition: none !important;
+  -ms-transition: none !important;
+  transition: none !important;
+}
+
+.trillo-upload-form .trillo-image-size-info {
+  
+}
+
+.trillo-upload-form-hidden-iframe {
+  height: 10px; 
+  visibility: hidden; 
+}
+
+
+/* Styles used by charts. */
+
+.trillo-chart-c {
+  width: 100%;
+  float:left;
+  padding: 10px;
+  min-width: 300px;
+}
+
+.trillo-chart-c .trillo-title {
+  margin-bottom: 15px;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 20px;
+  text-align: center;
+}
+
+
+/* Editable list. */
+
+.trillo-editable-table {
+  padding: 10px 20px;
+}
+
+.trillo-group-title {
+  background: #787878;
+  color: #fefefe;
+  font-weight: normal;
+  font-size: 12px;
+}
+
+.trillo-editable-table th,
+.trillo-editable-table td {
+  padding:3px 5px;
+  border:1px solid #cccccc;
+  font-size: 11px;
+}
+
+.trillo-editable-table td input,
+.trillo-editable-table td select {
+  width: 100%;
+  border: 1px solid #dddddd;
+  font-size: 11px;
+  padding: 0px 5px;
+}
+
+.trillo-editable-table td.trillo-has-error input,
+.trillo-editable-table td.trillo-has-error select {
+  border-color: #a94442;
+}
+
+.trillo-editable-table-actions {
+  display: table-cell;
+}
+
+.trillo-editable-table-action {
+  margin: 0px 5px;
+  cursor: pointer;
+}
+
+.trillo-editable-table .trillo-list-header {
+  position: static;
+}
+
+
+/* CSS styles for trillo list view. */
+
+.trillo-drop-down-list .trillo-selector-view {
+  float: left;
+}
+
+.trillo-drop-down-list-tools  {
+  float: left;
+  margin: 5px;
+}
+
+/* Flex grid style for tiles (example usage dashboard). */
+
+.trillo-flex-cell {
+  position: absolute;
+  border: 1px solid #eeeeee;
+  display: flex;
+  flex-direction: column;
+  margin: 4px;
+}
+
+.trillo-cell-topbar {
+  flex: 0;
+  height:30px; 
+  border-bottom: 1px solid #eeeeee; 
+  background-color: #f2f2f2;
+  padding: 0px 5px;
+}
+
+.trillo-cell-topbar .fa {
+  margin: 8px 5px 8px 0px;
+  text-decoration: none;
+  color: #c2c2c2;
+}
+
+.trillo-cell-topbar .fa:hover, .trillo-cell-topbar .fa:focus {
+  color: #2a6496;
+}
+
+.trillo-cell-content {
+  flex: 1;
+  position:relative;
+}
+
+.trillo-cell-topbar-menu {
+  float: right;
+}
+
+.trillo-cell-topbar-menu .dropdown-toggle {
+  margin: 8px 0px 8px 5px;
+  padding: 0 6px;
+}
+
+.trillo-cell-topbar-menu .dropdown-menu {
+  right: 0px;
+  font-size: 11px;
+  left: auto;
+  min-width: 100px;
+  margin-top: -8px;
+}
+
+.trillo-cell-topbar-menu .dropdown-menu > li > a, 
+.trillo-cell-topbar-menu .dropdown-menu > li > span {
+  line-height: 11px;
+  white-space: nowrap;
+  margin: 6px 3px;
+  font-size: 11px;
+  padding: 3px;
+}
+
+.trillo-flex-grid-iconbar {
+  height:30px;
+  padding:5px 10px;
+  width:100%;
+  z-index:1010; 
+  position: fixed; 
+  bottom:0px; 
+  background-color:#eee
+}
+
+.trillo-flex-minified-icon {
+  font-size: 20px;
+  margin-right: 10px;
+  margin-left: 10px;
+}
+
+/* arrows used as pointer, for example popover pointing to its trigger */
+
+.trillo-arrow-up {
+  width: 0; 
+  height: 0; 
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 12px solid #666;
+}
+
+.trillo-arrow-down {
+  width: 0; 
+  height: 0; 
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 12px solid #666;
+}
+
+.trillo-arrow-right {
+  width: 0; 
+  height: 0; 
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  border-left: 12px solid #666;
+}
+
+.trillo-arrow-left {
+  width: 0; 
+  height: 0; 
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent; 
+  border-right:12px solid #666; 
+}
+
+
+/* Popover */
+
+.trillo-popover-container {
+  min-width: 100px; 
+  position: fixed; 
+  display: none; 
+  z-index: 1005; 
+  top: 55px; bottom: 0px; 
+  border-top: 1px solid #dadada"
+}
+
+.trillo-popover-container .trillo-popover-close {
+  right: 20px; 
+  top: 20px; 
+  position: absolute; 
+  font-size: 16px; 
+  z-index: 2; 
+  cursor: pointer
+}
+
+.trillo-popover-content {
+  width: 100% !important;
+  height: 100% !important;
+  position: static !important;
+  margin: 0 !important;
+  display: block !important;
+}
+
+.trillo-popover-content .trillo-tree-container {
+  padding-right: 30px;
+}
+
+.trillo-toolbar-popup-container {
+  padding: 15px 5px;
+  position: absolute; 
+  display:none; 
+  z-index: 1005; 
+  border: 1px solid #ccc; 
+  background-color: #fff;
+}
+
+.trillo-toolbar-popup-container .trillo-toolbar {
+  margin: 0px;
+  background-color: #fff;
+}
+
+.trillo-toolbar-popup-container .trillo-toolbar .trillo-toolbar-inner > div  {
+  float: none;
+}
+
+.trillo-toolbar-popup-container .btn {
+  background-image: none;
+  border-width: 0px;
+  box-shadow: none;
+  display: block;
+  font-size:14px;
+  margin:3px 0px;
+}
+
+.trillo-toolbar-popup-container .btn:hover,
+.trillo-toolbar-popup-container .btn:active,
+.trillo-toolbar-popup-container .btn:focus {
+  background-color: #fff;
+  color: #337ab7;  
+}
+
+.trillo-popover-container .trillo-arrow-up,
+.trillo-toolbar-popup-container .trillo-arrow-up {
+  border-bottom-color: #ccc; 
+  position: absolute;
+}
+
+/* Positioned absolute, used for dropdown navigations. */
+
+.trillo-popover-dropdown-menu {
+  min-width: 100px; 
+  min-height: 50px;
+  position: absolute; 
+  display: none; 
+  z-index: 1005; 
+}
+
+/* Toggle button for a popover panel */
+
+.trillo-generic-toggle {
+  padding: 5px;
+  background-image: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  margin: 4px 10px;
+  background-color: #a2a2a2;
+  float:left;
+}
+
+.trillo-generic-toggle:focus {
+  outline: 0;
+}
+
+.trillo-generic-toggle .icon-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background-color: #fff;
+}
+
+.trillo-generic-toggle .icon-bar + .icon-bar {
+  margin-top: 4px;
+}
+
+.trillo-generic-toggle .icon-bar.icon-bar2 {
+  width: 18px;
+}
+
+.trillo-generic-toggle .icon-bar.icon-bar3 {
+  width: 14px;
+}
+
+.trillo-trigger-has-no-content {
+  display: none;
+}
+
+.trillo-dropdown-menu {
+    min-width: 130px;
+    left: auto;
+}
+
+.trillo-dropdown-menu > li > a, .trillo-dropdown-menu > li > span {
+    line-height: 20px;
+    white-space: nowrap;
+    margin: 8px 8px;
+    font-size: 14px;
+    padding: 4px;
+}
+
+.trillo-context-menu {
+  position: absolute;
+  z-index: 2001;
+}
+
+.trillo-context-menu .dropdown-menu {
+  position: static;
+  display: block;
+}
+
+.trillo-popover-dropdown-menu .dropdown-menu {
+  position: static; 
+  display: block; 
+  padding: 5px;
+}
+
+/* Title bar styles. */
+
+.trillo-title-breadcrumb {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  width: 100%;
+  overflow:hidden;
+}
+
+.trillo-title-breadcrumb > span {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trillo-title-breadcrumb > span + span:before {
+  padding: 0 5px;
+  color: #ccc;
+  content: "/\00a0";
+}
+
+/* Styles the view title bar (used for main title bar) */
+
+.trillo-content-title-bar {
+  padding:5px 20px;
+  background-color:#f2f2f2;
+  border: 1px solid #dadada;
+  border-width: 0px 1px;
+  position: fixed;
+  z-index: 1004;
+  top:55px;
+  left: 0px;
+  right:0;
+  height:40px;
+}
+
+.trillo-view-title {
+  float: left;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 20px;
+  margin: 5px 5px 0 0;
+  padding: 0px 12px 0px 0px;
+}
+
+
+/* Toolbar styles */
+
+.trillo-tool-bar {
+  padding: 5px 20px;
+  background-color: #f2f2f2;
+  border: 1px solid #dadada;
+  margin-bottom: 5px;
+  position: fixed;
+  z-index: 1003;
+  top: 95px;
+  left: 0px;
+  right: 0;
+  height: 34px;
+}
+
+.trillo-tool-bar > div {
+  float: left;
+  margin-right: 5px;
+}
+
+.trillo-tool-group > div {
+  float: left;
+  margin-right: 5px;
+}
+
+/* Styles used for the title of a panel */
+
+.trillo-bar-inner {
+  padding: 5px 10px;
+  background-color: #dddddd;
+  border: 1px solid #cccccc;
+  border-bottom-width: 0px;
+  height: 33px;
+}
+
+.trillo-bar-inner .trillo-title-bar {
+  text-align: left;
+  width: 50%;
+  font-size: 14px;
+  float: left;
+  line-height: 22px;
+}
+
+.trillo-bar-inner .trillo-buttons-bar {
+  text-align: right;
+  width: 50%;
+  float: right;
+}
+
+
+/* Title bar of tabular view shown using a popup. */
+
+.trillo-list-title-bar {
+  padding: 10px;
+  font-size: 17px;
+  font-weight:bold;
+  line-height: 23px;
+}
+
+/* Styles used in static pages. */
+
+.trillo-pointed {
+  position: relative;
+  display: inline-block;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: -10px 0px 0px -25px;
+  float: left;
+  font-size: 20px;
+  color: #ff9933;
+}
+
+.trillo-doc-content-container {
+  max-width: 900px;
+  padding: 0px 30px 20px;
+  margin: auto;
+  height: auto !important;
+  min-height: 100%;
+  background-color: #ffffff;
+  font-size:14px;
+  line-height: 1.45em;
+  color: #000000;
+}
+
+.trillo-doc-content-container td, 
+.trillo-doc-content-container th, 
+.trillo-doc-content-container pre {
+  font-size:14px;
+  line-height: 1.45em;
+}
+
+.trillo-doc-content-container  hr {
+  border-style: inset;
+  border-width: 1px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+}
+
+/* common file list browser and uploader */
+
+.trillo-filelist-c {
+  position: absolute; 
+  top: 0px; 
+  left: 0px; 
+  right: 0px; 
+  z-index:100000;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.trillo-filelist-close {
+  position:absolute; 
+  top: 5px; 
+  right: 5px;
+  padding: 0px 8px 3px;
+  border-radius: 16px;
+}
+
+.trillo-filelist-c .trillo-info-block {
+  width: 240px;
+}
+.trillo-filelist-c .trillo-info-block img {
+  max-width: 220px;
+  max-height: 160px;
+}
+
+.trillo-filelist-c .img-def-image-tn-c {
+  width: 220px;
+  height: 160px;
+  text-align: center;
+  margin: 0px auto;
+}
+
+/ * modal */
+
+.trillo-modal {
+  z-index: 400003;
+}
+
+
+/* Progress bars */
+
+.trillo-global-progress-indicator .progress {
+  height:10px;
+  margin: 3px;
+}
+
+.trillo-global-progress-indicator .progress .progress-bar {
+  width: 10%;
+}
+
+.trillo-object-progress-indicator .progress {
+  height:10px;
+  margin: 5px;
+}
+
+.trillo-busy-indicator.progress .progress-bar {
+  width: 100%;
+}
+
+
+.trillo-upload-dragdrop-box .progress {
+  visibility: hidden; 
+  margin-top: 10px; 
+  margin-bottom: 0px; 
+  height: 10px
+}
+
+/* Header css */
+
+.navbar-1 {
+  min-width: 300px;
+  height: 55px;
+  padding: 0;
+  background-image: -webkit-linear-gradient(top, #4d80af 0%, #2b5593 100%);
+  background-image: -o-linear-gradient(top, #4d80af 0%, #2b5593 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, from(#4d80af),
+    to(#2b5593));
+  background-image: linear-gradient(to bottom, #4d80af 0%, #2b5593 100%);
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#ff4d80af',
+    endColorstr='#ff2b5593', GradientType=0);
+  filter: progid:DXImageTransform.Microsoft.gradient(enabled= false);
+  background-repeat: repeat-x;
+  position: fixed;
+  width: 100%;
+  z-index: 1030;
+  top: 0px;
+  left: 0px;
+}
+
+.navbar-1 .navbar-nav>.active>a {
+  background-color: #4d80af;
+}
+
+.navbar-1 .navbar-brand, 
+.navbar-1 .navbar-nav>li>a {
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, .25);
+}
+
+.navbar-1 .icon-bar {
+  background-color: #fff;
+}
+
+.navbar-1 a {
+  color: #c9e6f2;
+}
+
+.navbar-1 a:hover, 
+.navbar-1 .open>a, 
+.navbar-1 
+.open>a:focus {
+  color: #428bca;
+}
+
+.navbar-1 .dropdown-menu>li>a:hover, 
+.navbar-1 .dropdown-menu>li>a:focus
+  {
+  background-color: #2b5593;
+}
+
+.navbar-1 .nav>li>a:hover, .navbar-1 .nav>li>a:focus {
+  background-color: #2b5593;
+  border-color: #428bca;
+}
+
+.navbar-1 .nav .open>a, .navbar-1 .nav .open>a:hover, .navbar-1 .nav .open>a:focus {
+  background-color: #2b5593;
+  border-color: #428bca;
+}
+
+.navbar-1 .nav > li > a {
+  padding-top: 18px;
+  padding-bottom: 17px;
+  line-height: 20px;
+}
+
+.navbar-brand {
+  padding: 11px;
+  height: 55px; 
+}
+
+.navbar-toggle {
+ margin-top: 11px;
+ margin-bottom: 10px; 
+}
+
+.navbar-1 .collapse.in { 
+ 
+}
+
+.nav-pills>li.nav-item {
+  margin: 15px 5px 15px 0px;
+  padding: 0px;
+  border-radius:4px;
+  color:#fff;
+  background-color: #ccc;
+  font-normal;
+  font-size: 12px;
+  line-height: 2em;
+  cursor: pointer;
+  text-align: center;
+}
+
+.dropdown-menu>li>a.trillo-selected, 
+.dropdown-menu>li>a.trillo-selected:hover, 
+.dropdown-menu>li>a.trillo-selected:focus,
+.nav-pills>li.nav-item.trillo-selected, 
+.nav-pills>li.nav-item:hover, 
+.nav-pills>li.nav-item:focus {
+  color: #fff !important;
+  background-color: #ff9933 !important;
+  background-image: none;
+}
+
+.navbar {
+  margin-bottom: 0px;
+}
+
+.navbar-fixed-top .navbar-collapse, .navbar-fixed-bottom .navbar-collapse {
+  max-height: none;
+}
+
+/* Bootstrap override for tabs */
+
+.nav-tabs > li {
+  float: left;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  overflow: hidden;
+  border: 1px solid #eeeeee;
+  border-radius: 15px 10px 0px 0px;
+}
+
+.nav-tabs > li:last-child {
+  border-right-width: 1px;
+}
+
+.nav-tabs > li.active {
+  border-color: #cccccc;
+  border-bottom-color: #fff;
+}
+
+.nav-tabs > li > a {
+  margin-right: 0;
+  line-height: 1.4;
+  border-width: 0px;
+  border-radius: 0;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  background-color: #f5f5f5;
+  padding: 4px 8px;
+}
+
+.nav-tabs > li.active > a, 
+.nav-tabs > li.active > a:hover, 
+.nav-tabs > li.active > a:focus {
+  color: #555;
+  cursor: default;
+  background-color: #fff;
+  border-width: 0px;
+}
+
+.navbar-brand > img { 
+  display: inline;
+}
+
+/* Bootstrap override */
+
+form {
+  font-size:14px; 
+  line-height:1.43em;
+}
+
+.form-group {
+  margin-bottom: 5px;
+}
+
+.footer {
+  margin-top:-34px;
+  height: 34px;
+  color: #787878;
+  background-color: #f2f2f2;
+  border-top: 1px solid #eeeeee;
+  z-index: 1000;
+  padding-top: 8px;
+  position: relative;
+  padding-right: 15px;
+}
+
+footer .navbar-nav > li {
+  float: left;
+}
+.footer .navbar-nav > li > a {
+  color: #4078c0;
+  background-color: transparent;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  font-size:13px;
+  text-shadow: none;
+}
+
+footer .navbar-left {
+  float: left !important;
+}
+
+footer .navbar-right {
+  float: right !important;
+}
+
+
+footer .navbar-nav {
+  margin-top: 0px;
+  margin-bottom: 0px;  
+}
+
+

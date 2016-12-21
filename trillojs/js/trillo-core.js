@@ -50,14 +50,15 @@ Trillo.AppInitializer = Class.extend({
     
     this.createBuilder();
     this.createViewManager();
-    this.createChartManager();
     this.createModelFactory();
+    this.createApiAdapterFactory();
     this.createObserverFactory();
     this.createPage();
     this.createRouter();
     this.createTitleBarManager();
     this.createContextMenuManager();
-   
+    this.createPopoverMananger();
+    this.createMultiViewDelegator();
     this.doCallback();
   },
   
@@ -89,12 +90,6 @@ Trillo.AppInitializer = Class.extend({
     }
   },
   
-  createChartManager: function() {
-    if (Trillo.ChartManager) {
-      Trillo.chartManager = new Trillo.ChartManager();
-    }
-  },
-  
   createBuilder: function() {
     if (Trillo.Builder) {
       Trillo.builder = new Trillo.Builder();
@@ -104,6 +99,12 @@ Trillo.AppInitializer = Class.extend({
   createModelFactory: function() {
     if (Trillo.ModelFactory) {
       Trillo.modelFactory = new Trillo.ModelFactory();
+    }
+  },
+  
+  createApiAdapterFactory: function() {
+    if (Trillo.ApiAdapterFactory) {
+      Trillo.apiAdapterFactory = new Trillo.ApiAdapterFactory();
     }
   },
   
@@ -135,6 +136,18 @@ Trillo.AppInitializer = Class.extend({
     if (Trillo.ContextMenuManager) {
       Trillo.contextMenuManager = new Trillo.ContextMenuManager();
     }
+  },
+  
+  createPopoverMananger: function() {
+    if (Trillo.PopoverManager) {
+      Trillo.popoverManager = new Trillo.PopoverManager();
+    }
+  },
+  
+  createMultiViewDelegator: function() {
+    if (Trillo.MultiViewDelegator) {
+      Trillo.multiViewDelegator = new Trillo.MultiViewDelegator();
+    }
   }
  
 });
@@ -151,7 +164,9 @@ Trillo.Options = {
   SCROLL_ON_HOVER : "scrollOnHover",
   AUTO_SCROLL : "autoScroll",
   SMOOTH_SCROLL : "smoothScroll",
-  NO_SCROLL : "noScroll"
+  NO_SCROLL : "noScroll",
+  NON_NATIVE_SCROLLBAR : "nonNativeScrollBar",
+  DIALOG_MAX_WIDTH: "400px"
 };
 
 Trillo.Config = {
@@ -187,6 +202,16 @@ Trillo.HtmlTemplates = {
     titleBarTitle : '<li nm="{{viewName}}-title">{{title}}</li>',
     
     /**
+     * Template used for rendering title-bar title prefix. (TODO document what title prefix means).
+     */
+    titleBarTitlePrefix2 : '<span nm="{{viewName}}-title-prefix">{{titlePrefix}}</span>',
+    
+    /**
+     * Template used for rendering title-bar title (TODO document what title means).
+     */
+    titleBarTitle2 : '<span nm="{{viewName}}-title">{{title}}</span>',
+    
+    /**
      * Template used for rendering dropdown list item
      */
     dropdownListItem : '<li><a class="js-list-item" nm="{{uid}}" href="#">{{name}}</a></li>'
@@ -199,7 +224,7 @@ Trillo.HtmlTemplates = {
 Trillo.CSS = {
     alertDanger: "alert-danger",  // failure alert
     alertSuccess : "alert-success", // success alert
-    pointed: "trillo-pointed", // content view pointer corresponding to selected Toc
+    pointed: "trillo-pointed fa fa-hand-o-right", // content view pointer corresponding to selected Toc
     hasErrorCss : "trillo-has-error", // input field with error
     hasMessageCss : "trillo-has-message", // input field with message (non-error)
     positionOutside : "trillo-position-outside", // position an element out of view (but not hidden "display:none")
@@ -484,7 +509,7 @@ Trillo.getCookieDomain = function(){
 Trillo.matches = function(obj1, obj2, deep) {
   var p;
   for (p in obj1) {
-    if (typeof (obj2[p]) === 'undefined') {
+    if (typeof (obj2[p]) === 'undefined' && typeof (obj1[p]) !== 'undefined') {
       return false;
     }
   }
@@ -544,20 +569,49 @@ Trillo.getSpecObject = function($e, selector) {
   if ($se.length === 0) {
     return null;
   }
-  var specs = {};
-  $se.each(function() {
-    var $specE = $(this);
-    var jsonText = $specE.html();
+  function makeSpec($script) {
+    var jsonText = $script.html();
+    var temp = null;
     if (jsonText && jsonText.length) {
       try {
-         $.extend(specs, $.parseJSON(jsonText));
+         temp = $.parseJSON(jsonText);
       } catch(exc) {
         Trillo.log.error("Failed to parse view spec JSON: " + exc.message + "<br/>" + jsonText);
       }
     }
-  });
+    return temp;
+  }
+  
+  function getSpecByName(list, name) {
+    for (var j=0; j<list.length; j++) {
+      if (list[j].name === name) {
+        return list[j];
+      }
+    }
+    return null;
+  }
+  
+  var $main = $se.length > 0 ? $($se[0]) : $se; // in case there are more than one viewSpec in a file
+  var spec = makeSpec($main);
+  if (spec && $se.length > 1) {
+    for (var i=1; i<$se.length; i++) {
+      var spec2 = makeSpec($($se[i]));
+      if (spec2 !== null) {
+        spec2.embedded = true;
+        if (!spec.nextViewSpecs) {
+          spec.nextViewSpecs = [];
+        }
+        var vs = getSpecByName(spec.nextViewSpecs, spec2.name);
+        if (!vs) {
+          spec.nextViewSpecs .push(spec2);
+        } else {
+          $.extend(vs, spec2);
+        }
+      }
+    }
+  }
   $se.remove();
-  return specs;
+  return spec;
 };
 
 Trillo.getNearestInDOMTree = function($e, selector) {
@@ -577,6 +631,14 @@ Trillo.getTriggerFromPath = function(path) {
   return path;
 };
 
+Trillo.getViewNameFromPath = function(path) {
+  var idx = path.indexOf(":");
+  if (idx >= 0) {
+    return path.substring(idx+1);
+  }
+  return path;
+};
+
 Trillo.clearObj = function(obj) {
   var prop;
   for (prop in obj) {
@@ -584,6 +646,142 @@ Trillo.clearObj = function(obj) {
   }
 };
 
+Trillo.endsWith = function(str, subStr) {
+  if (str.length < subStr.length) return false;
+  return str.lastIndexOf(subStr) === str.length - subStr.length;
+};
+
+
+Trillo.deleteFromArray = function(l, item) {
+  var idx = l.indexOf(item);
+  if (idx >= 0) {
+    l.splice(idx, 1);
+  }
+};
+
+
+Trillo.findByProp = function(l, prop, value) {
+  if (l) {
+    for (var i=0; i<l.length; i++) {
+      if (l[i][prop] === value) {
+        return l[i];
+      }
+    }
+  }
+  return null;
+};
+
+Trillo.endsWith = function(str, suffix) {
+  if (!str || !suffix) return false;
+  return str.indexOf(suffix, str.length - suffix.length) !== -1;
+};
+
+Trillo.endsWithIgnoreCase = function(str, suffix) {
+  if (!str || !suffix) return false;
+  str = str.toLowerCase();
+  suffix = suffix.toLowerCase();
+  return str.indexOf(suffix, str.length - suffix.length) !== -1;
+};
+
+
+Trillo.Storage = Class.extend({
+  initialize : function(storage) {
+    this.storage = storage;
+  },
+  setItem: function(key, item) {
+    item = typeof item === "string" ? item : JSON.stringify(item);
+    this.storage.setItem(key, item);
+  },
+  getItem: function(key) {
+    return this.storage.getItem(key);
+  },
+  getItemAsObj: function(key) {
+    var s =this.storage.getItem(key);
+    return s ? JSON.parse(s) : s;
+  },
+  removeItem: function(key) {
+    this.storage.removeItem(key);
+  },
+  clear: function() {
+    var keys = [], i;
+    for (i = 0; i < this.storage.length; i++) {
+      keys.push(this.storage.key(i));
+    }
+    for (i = 0; i < keys.length; i++) {
+      this.removeItem(keys[i]);
+    }
+  },
+  removeAllStartingWith: function(prefix) {
+    var keys = [], i;
+    for (i = 0; i < this.storage.length; i++) {
+      if (this.storage.key(i).indexOf(prefix) === 0) {
+        keys.push(this.storage.key(i));
+      }
+    }
+    for (i = 0; i < keys.length; i++) {
+      this.removeItem(keys[i]);
+    }
+  }
+});
+
+
+Trillo.sessionStorage = new Trillo.Storage(sessionStorage);
+
+Trillo.localStorage = new Trillo.Storage(localStorage);
+Trillo.NavHistory = Class.extend({
+  initialize : function() {
+    
+  },
+  
+  add: function(parentPath, nextPath, nextPathParams) {
+    console.log("NavHistory.add(): " + parentPath + " -> " + nextPath);
+    Trillo.localStorage.setItem(parentPath, nextPath);
+    if (nextPathParams) {
+      Trillo.localStorage.setItem("params://" + Trillo.getFullPath(parentPath, nextPath), nextPathParams);
+    } else {
+      Trillo.localStorage.removeItem("params://" + Trillo.getFullPath(parentPath, nextPath));
+    }
+  },
+  
+  get: function(parentPath) {
+    if (this.isDisabled()) {
+      return null;
+    }
+    var nextPath = Trillo.localStorage.getItem(parentPath);
+    console.log("NavHistory.get(): " + parentPath + " -> " + nextPath);
+    return nextPath;
+  },
+  
+  remove: function(path) {
+    if (this.isDisabled()) {
+      return null;
+    }
+    console.log("NavHistory.remove(): " + path);
+    Trillo.localStorage.removeItem(path);
+  },
+  
+  getParams: function(parentPath, nextPath, nextPathParams) {
+    if (this.isDisabled()) {
+      return null;
+    }
+    var params = Trillo.localStorage.getItem("params://" + Trillo.getFullPath(parentPath, nextPath));
+    console.log("NavHistory.getParams(): " + parentPath + "/" + nextPath + "?" + params);
+    return params;
+  },
+  
+  setDisabled: function(value) {
+    // history disabled flag is set in the sessionStorage to be non-persistent
+    Trillo.sessionStorage.setItem("_nav_history_disabled", "" + value);
+  },
+  
+  isDisabled: function() {
+    return Trillo.sessionStorage.getItem("_nav_history_disabled") === "true";
+  }
+  
+});
+
+
+Trillo.navHistory = new Trillo.NavHistory();
 
 Trillo.EnumCatalog = Class.extend({
   initialize : function() {
@@ -670,7 +868,17 @@ $(function() {
       }
       var msg = data.message || data.detail;
       if (msg) {
-        Trillo.log.error(msg);
+        if (msg == "_REPO_NOT_AUTORIZED") {
+          msg = "You are viewing the application in demo mode.<br/>" +
+                "All update operations are disabled in this mode.";
+          Trillo.showModal("Demo Mode", msg);
+        } else if (msg == "_NOT_AUTORIZED") {
+          msg = "Access is not allowed. <br/>Either your session has expired <br/>or you are accessing a page not available using current login info.";
+          Trillo.log.error(msg);
+        } else {
+          Trillo.log.error(msg);
+        }
+        
       }
     } catch (exc) {
       if (opts.error) {
@@ -853,6 +1061,7 @@ Trillo.Router = Class.extend({
   },
   
   start: function() {
+    Trillo.navHistory.setDisabled(true);
     var path = (location.pathname || "") + (location.search || "");
    
     this.initialRoute = path;
@@ -864,26 +1073,41 @@ Trillo.Router = Class.extend({
   },
   
   historyChanged: function(event, route, type) {
+    if (event.type === "load") {
+      Trillo.navHistory.setDisabled(true);
+    }
     if (!route || this.busyProcessing) {
       return;
     }
     if (route === this.initialRoute) {
       route = this.defaultRoute;
     }
-    this.routeTo(route);
+    
+    this.routeTo(route, false, true);
   },
   
-  routeTo : function(route, pushRequired) {
+  routeTo : function(route, pushRequired, fromHistoryChange) {
     if (this.busyProcessing) {
       return;
     }
     this.busyProcessing = true;
     var self = this;
     route = this.normalizeRoute(route); // removes app name and leading "/"
+    if (fromHistoryChange) {
+      var routeSpecArr = Trillo.getRouteSpecsFromRoute(route);
+      var routePath = Trillo.getRouteUptoIndex(routeSpecArr, routeSpecArr.length-1, false);
+      if (routePath) {
+        Trillo.navHistory.remove(routePath);
+      }
+      
+    }
     var promise = Trillo.page.show(route);
     promise.done(function(listOfViews) {
       if (listOfViews && listOfViews.length > 0) {
-        var newRoute = listOfViews[listOfViews.length-1].controller().getRouteUpTo();
+        var newRoute = listOfViews[listOfViews.length-1].controller().getRouteUpTo(true, true);
+        if (Trillo.appContext.autoLogin === "true") {
+          newRoute += "?autoLogin=true";
+        }
         if (self.isHistoryOn) {
           if (pushRequired) {
             $.history.push(newRoute);
@@ -901,6 +1125,27 @@ Trillo.Router = Class.extend({
         self.setHistoryOn();
       }
       self.busyProcessing = false;
+      
+      // hide tools trigger which have no target or target has no children.
+      var $temp1, $temp2, temp;
+      $(".js-navbar-toggle", this.$e).each(function () {
+        $temp1 = $(this);
+        $temp2 = $($temp1.data("target"));
+        if ($temp2.length === 0) {
+          temp = $temp1.data("container-target");
+          if (temp) {
+            $temp2 = $('[nm="' + temp + '"]');
+          }
+        }
+        if ($temp2.length === 0 || $temp2.children().length === 0) {
+          $temp1.addClass("hide");
+        } else {
+          $temp1.removeClass("hide");
+        }
+      });
+      
+      // after one cycle of routing enable history
+      Trillo.navHistory.setDisabled(false);
     });
     promise.fail(function(result) {
       self.clearMarkedForClearing();
@@ -942,6 +1187,7 @@ Trillo.Router = Class.extend({
     if (!route) {
       return route;
     }
+    route = decodeURIComponent(route);
     var prefix = Trillo.Config.pagePath;
     if (route.indexOf(prefix) === 0) {
       route = route.substring(prefix.length); 
@@ -981,49 +1227,49 @@ Trillo.ModelFactory = Class.extend({
     
   }, 
   
-  createModel: function(modelSpec, view) {
+  createModel: function(modelSpec, controller) {
     // make a copy of the given modelSpec so we can avoid inconsistency if
     // passed modelSpec is changed by invoker
     modelSpec = $.extend({}, modelSpec);
     var model;
-    model = this.createModelForName(modelSpec, view);
+    model = this.createModelForName(modelSpec, controller);
     if (!model) {
       var appNamespace = Trillo.appNamespace;
-      model = this.createModelForNS(appNamespace, modelSpec, view);
+      model = this.createModelForNS(appNamespace, modelSpec, controller);
       if (!model) {
         // try common
-        model = this.createModelForNS(window.Shared, modelSpec, view);
+        model = this.createModelForNS(window.Shared, modelSpec, controller);
       }
       if (!model) {
         if (modelSpec.impl) {
-          Trillo.log.warning("Model class '" + modelSpec.impl + "' not found, using default Model.");
+          debug.warn("Model class '" + modelSpec.impl + "' not found, using default Model.");
         }
-        model = new Trillo.Model(modelSpec, view);
+        model = new Trillo.Model(modelSpec, controller);
       }
     }
     return model;
   },
   
-  createModelForName: function(modelSpec, view) {
+  createModelForName: function(modelSpec, controller) {
     var clsName = modelSpec.impl;
     if (clsName) {
       var clsRef = Trillo.getRefByQualifiedName(clsName);
       if (clsRef) {
-        return new clsRef(modelSpec, view);
+        return new clsRef(modelSpec, controller);
       }
     }
     return null;
   },
 
-  createModelForNS: function(ns, modelSpec, view) {
+  createModelForNS: function(ns, modelSpec, controller) {
     var clsName = modelSpec.impl;
     if (clsName) {
       if (ns && ns[clsName]) {
-        return new ns[clsName](modelSpec, view);
+        return new ns[clsName](modelSpec, controller);
       } else {
         var clsRef = Trillo.getRefByQualifiedName(clsName);
         if (clsRef) {
-          return new clsRef(modelSpec, view);
+          return new clsRef(modelSpec, controller);
         }
       }
     }
@@ -1039,18 +1285,36 @@ Trillo.Model = Class.extend({
     this._controller = controller;
     this.observer = null;
     this.table = {};
-    this.data = modelSpec._newData || modelSpec.data;
     this.newItemsAtEnd = modelSpec.newItemsAtEnd;
-    this.parentData = modelSpec.parentData;
     this.dataPath = modelSpec.dataPath || "";
+    this.trackedData = modelSpec.trackedData;
     this.listners = [];
     this.addListener(controller); // controller is primary listener
-    this.savedStateChanges = [];
-    this.revertedStateChanges = [];
-    this.managingState = false;
+    this.saveChanges = [];
+    this.revertedChanges = [];
+    this.managingChange = false;
     this.txOn = false;
     this.txId = -1;
     this.txIdCounter = 0;
+    
+    // context is saved with undo/ redo change definition, its controller/ view can set it to 
+    // any arbitrary value which will be available during undo/ redo
+    this.context = null;
+    
+    // an object to hold custom states, used and updated by application 
+    // code. This is useful for storing intermediate state of application.
+    // It is not sent to the server as model data. But it can be used to script url 
+    // parameters or post body (used as parameters).
+    this.state = {};
+    
+    /* paginationInfo stores info required for pagination.
+      
+      paginationInfo.pageSize = <number of items per page>;
+      paginationInfo.numberOfPages = <total number of pages>;
+      paginationInfo.totalNumberOfItems = <total number of items>;
+      paginationInfo.pageNumber = <page number of last page retrieved>;
+    */
+    this.paginationInfo = null;
   },
   
   view: function() {
@@ -1061,25 +1325,38 @@ Trillo.Model = Class.extend({
     return this._controller;
   },
   
-  stateManagerModel: function() {
-    if (this.managingState) {
-      return this;
-    }
+  parentModelData: function() {
+    /* Model can be parent of other models via controllers. */
     var pc = this._controller.parentController();
-    if (pc) {
-      return pc.model().stateManagerModel();
+    return pc ? pc.modelData() : null;
+  },
+  
+  getSelectedObj: function() {
+    return this._controller.getSelectedObj();
+  },
+  
+  getParentSelectedObj: function() {
+    var pc = this._controller.parentController();
+    return pc ? pc.getSelectedObj() : null;
+  },
+  
+  getClosestSelectedObj: function() {
+    return this._controller.getClosestSelectedObj();
+  },
+  
+  getState: function() {
+    return this.state;
+  },
+  
+  getContextUid: function() {
+    return this._controller.getContextUid();
+  },
+  
+  updateData: function(data) {
+    if (data) {
+      this.data = data;
+      this.setupModel(); // initializes framework specific attributes and a lookup table (this.table).
     }
-    return null;
-  },
-  
-  clear: function() {
-    this.clearObserver();
-    this.table = {};
-  },
-  
-  isModelSpecChanged: function(modelSpec) {
-    return !Trillo.matches(modelSpec, this.modelSpec) ||
-    (modelSpec.data && modelSpec.data !== this.data) || (modelSpec._newData);
   },
   
   setData: function(data) {
@@ -1090,13 +1367,18 @@ Trillo.Model = Class.extend({
       data = {}; // use empty data
     }
     this.data = data;
-    this.modelSpec.data = data;
+    this.setupModel();
     this.triggerModelDataChanged();
-    if (this.managingState) {
-      this.savedStateChanges = [];
-      this.revertedStateChanges = [];
-      this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+    if (this.managingChange) {
+      this.saveChanges = [];
+      this.revertedChanges = [];
+      this.controller().changeManagerUpdated(this.saveChanges.length, this.revertedChanges.length);
     }
+  },
+  
+  clear: function() {
+    this.clearObserver();
+    this.table = {};
   },
   
   cloneData: function() {
@@ -1119,10 +1401,10 @@ Trillo.Model = Class.extend({
   setValue: function(name, value) {
     var f = null;
     var oldValue = this.getValue(name);
-    var smm = this.stateManagerModel();
-    if (smm) {
-      f = smm.beginTx();
-      this.saveStateChange({changeType: "objectAttrChanged", obj: this.data, name: name, value: value, oldValue: oldValue, 
+    var changeMgr = this.getChangeManager();
+    if (changeMgr) {
+      f = changeMgr.beginTx();
+      this.saveChange({changeType: "objectAttrChanged", obj: this.data, name: name, value: value, oldValue: oldValue, 
         affected : this.getAffectedData(this.data)});
     }
     Trillo.setObjectValue(this.data, name, value);
@@ -1159,11 +1441,11 @@ Trillo.Model = Class.extend({
   setObjAttr: function(obj, name, value) {
     var f = null;
     if (obj) {
-      var smm = this.stateManagerModel();
+      var changeMgr = this.getChangeManager();
       var oldValue = Trillo.getObjectValue(obj, name);
-      if (smm) {
-        f = smm.beginTx();
-        this.saveStateChange({changeType: "objectAttrChanged", obj: obj, name: name, value: value, oldValue: this.getValue(name),
+      if (changeMgr) {
+        f = changeMgr.beginTx();
+        this.saveChange({changeType: "objectAttrChanged", obj: obj, name: name, value: value, oldValue: oldValue,
           affected : this.getAffectedData(this.data)});
       }
       Trillo.setObjectValue(obj, name, value);
@@ -1235,67 +1517,6 @@ Trillo.Model = Class.extend({
     Trillo.setObjectValue(obj, name, value);
     this.triggerChanged(obj);
   },
-  
-  loadData: function() {
-    var deferred = $.Deferred();
-    if (this.data) {
-      /// data already available; may happen if a model is created from the data from the other model.
-      deferred.resolve(this);
-      return deferred.promise();
-    }
-    if (this.parentData) {
-      this.data = Trillo.getObjectValue(this.parentData, this.dataPath);
-    } else if (!this.data) {
-      this.data = {};
-    }
-    deferred.resolve(this);
-    return deferred.promise();
-  },
-
-  loadTestData: function(viewName) {
-    var deferred = $.Deferred();
-    var self = this;
-    if (!viewName) {
-      this.data = {}; // use empty object as test data
-      deferred.resolve(self);
-    } else {
-      $.ajax({
-        url: "/loadTestData?viewName=" + viewName + "&appName=" + Trillo.appName,
-        type: 'get'
-      }).done($.proxy(this.dataLoaded, this, deferred)).
-      fail(function() {
-        deferred.reject({
-          errorMsg: "Failed to load test data"
-        });
-      });
-    }
-    return deferred.promise();
-  },
-  
-  loadChartTestData: function(chartName) {
-    var deferred = $.Deferred();
-    var self = this;
-    if (!chartName) {
-      this.data = {}; // use empty object as test data
-      deferred.resolve(self);
-    } else {
-      $.ajax({
-        url: "/loadChartTestData?chartName=" + chartName + "&appName=" + Trillo.appName,
-        type: 'get'
-      }).done($.proxy(this.dataLoaded, this, deferred)).
-      fail(function() {
-        deferred.reject({
-          errorMsg: "Failed to load chart test data"
-        });
-      });
-    }
-    return deferred.promise();
-  },
-  
-  dataLoaded: function(deferred, data) {
-    this.data = data;
-    deferred.resolve(this);
-  },
 
   addListener: function(listner) {
     if (!this.hasListener(listner)) {
@@ -1360,13 +1581,26 @@ Trillo.Model = Class.extend({
     }
   },
   
-  processObjAdded: function(newObj) {
+  addObj: function(newObj) {
     this.table[newObj.uid] = newObj;
+    var data = this.data;
+    if (data && typeof data.length !== "undefined") {
+      if (this.newItemsAtEnd) {
+        data.push(newObj);
+      } else {
+        data.unshift(newObj);
+      }
+      var pi = this.paginationInfo;
+      if (pi) {
+        pi.totalNumberOfItems += 1;
+        pi.numberOfPages = Math.ceil(pi.totalNumberOfItems / pi.pageSize);
+      }
+    }
     this.triggerAdded(newObj);
     return newObj;
   },
   
-  processObjChanged: function(item) {
+  changeObj: function(item) {
     var itemOld, table = this.table;
     itemOld = table[item.uid];
     if (itemOld) {
@@ -1378,18 +1612,45 @@ Trillo.Model = Class.extend({
     return itemOld;
   },
   
-  processObjDeleted: function(item) {
+  deleteObj: function(item) {
     var itemOld, table = this.table;
     itemOld = table[item.uid];
     if (itemOld) {
       table[item.uid] = null;
+      var data = this.data;
+      if (data && typeof data.length !== "undefined") {
+        Trillo.deleteFromArray(data, item);
+        var pi = this.paginationInfo;
+        if (pi) {
+          pi.totalNumberOfItems -= 1;
+          pi.numberOfPages = Math.ceil(pi.totalNumberOfItems / pi.pageSize);
+        }
+      }
       this.triggerDeleted(itemOld);
     }
     return itemOld;
   },
+  
+  addTreeNodeObj: function(newObj, parent) {
+    if (!parent.children) {
+      parent.children = [];
+    }
+    parent.children.push(newObj);
+    this.setupTreeData();
+    this.addObj(newObj);
+  },
+  
+  deleteTreeNodeObj: function(obj) {
+    var p = obj.parent;
+    if (p && p.children) {
+      Trillo.deleteFromArray(p.children, obj);
+    }
+    this.setupTreeData();
+    this.deleteObj(obj);
+  },
  
   createObserver: function() {
-    if (this.listners.length > 0 && !this.observer) {
+    if (this.modelSpec.observeChanges && !this.observer && this.listners.length > 0 ) {
       var opt = this.getObserverOptions();
       if (opt !== null) {
         opt.cb = $.proxy(this.receivedNotifications, this);
@@ -1399,7 +1660,8 @@ Trillo.Model = Class.extend({
   },
   
   getObserverOptions: function() {
-    return null;
+    var apiAd = this._controller.apiAdapter();
+    return apiAd ? apiAd.getObserverOptions(this.data) : null;
   },
   
   clearObserver: function() {
@@ -1415,11 +1677,11 @@ Trillo.Model = Class.extend({
     var itemOld, table = this.table;
     itemOld = table[item.uid];
     if (item._deleted_) {
-      this.processObjDeleted(item);
+      this.deleteObj(item);
     } else if (itemOld) {
-      this.processObjChanged(item);
+      this.changeObj(item);
     } else {
-      this.processObjAdded(item);
+      this.addObj(item);
     }
   },
 
@@ -1449,86 +1711,104 @@ Trillo.Model = Class.extend({
     }
   },
   
-  saveStateChange: function(stateChange) {
-    var smm = this.stateManagerModel();
-    if (smm) {
-      var f = smm.beginTx();
-      smm._saveStateChange(stateChange, this);
-      f();
+  /*
+   * Returns the model which is acting as a change manager.
+   */
+  getChangeManager: function() {
+    if (this.managingChange) {
+      return this;
     }
+    var pc = this._controller.parentController();
+    if (pc) {
+      return pc.model().getChangeManager();
+    }
+    return null;
   },
   
   saveModelData: function(oldData, params) {
-    var smm = this.stateManagerModel();
-    if (smm) {
-      var f = smm.beginTx();
-      smm._saveStateChange({changeType: "modelData", oldData: oldData, newData: this.cloneData(), data: this.data, params: params,
+    var changeMgr = this.getChangeManager();
+    if (changeMgr) {
+      var f = changeMgr.beginTx();
+      changeMgr._saveChange({changeType: "modelData", oldData: oldData, newData: this.cloneData(), data: this.data, params: params,
         affected : this.getAffectedData(this.data)}, this);
       f();
     }
   },
   
-  _saveStateChange: function(stateChange, sourceModel) {
-    this.revertedStateChanges = [];
-    this.savedStateChanges.push({stateChange: stateChange, sourceModel: sourceModel, __txId: this.txId});
-    this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+  saveChange: function(change) {
+    var changeMgr = this.getChangeManager();
+    if (changeMgr) {
+      var f = changeMgr.beginTx();
+      changeMgr._saveChange(change, this);
+      f();
+    }
+  },
+  
+  _saveChange: function(change, sourceModel) {
+    this.revertedChanges = [];
+    this.saveChanges.push({change: change, sourceModel: sourceModel, __txId: this.txId, context: sourceModel.context});
+    this.controller().changeManagerUpdated(this.saveChanges.length, this.revertedChanges.length);
   },
   
   undo: function() {
-    if (this.savedStateChanges.length) {
-      var idx = this.savedStateChanges.length - 1;
-      var currentTxId = this.savedStateChanges[idx].__txId;
+    if (this.saveChanges.length) {
+      var idx = this.saveChanges.length - 1;
+      var currentTxId = this.saveChanges[idx].__txId;
       var firstInTx = true;
-      while (idx >= 0 && this.savedStateChanges[idx].__txId === currentTxId) {
-        var changeDef = this.savedStateChanges.pop();
-        this.controller().undoing(changeDef.stateChange, firstInTx);
-        changeDef.sourceModel.undoStateChange(changeDef.stateChange);
-        this.revertedStateChanges.push(changeDef);
-        this.controller().undone(changeDef.stateChange, firstInTx);
+      while (idx >= 0 && this.saveChanges[idx].__txId === currentTxId) {
+        var changeDef = this.saveChanges.pop();
+        this.controller().undoing(changeDef.change, firstInTx, changeDef.context);
+        changeDef.sourceModel.undoChange(changeDef.change);
+        this.revertedChanges.push(changeDef);
+        this.controller().undone(changeDef.change, firstInTx, changeDef.context);
         idx--;
         firstInTx = false;
       }
-      this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+      this.controller().changeManagerUpdated(this.saveChanges.length, this.revertedChanges.length);
+      this.controller().undoCompleted();
     }
   },
   
   redo: function() {
-    if (this.revertedStateChanges.length) {
-      var idx = this.revertedStateChanges.length - 1;
-      var currentTxId = this.revertedStateChanges[idx].__txId;
+    if (this.revertedChanges.length) {
+      var idx = this.revertedChanges.length - 1;
+      var currentTxId = this.revertedChanges[idx].__txId;
       var firstInTx = true;
-      while (idx >= 0 && this.revertedStateChanges[idx].__txId === currentTxId) {
-        var changeDef = this.revertedStateChanges.pop();
-        this.controller().redoing(changeDef.stateChange, firstInTx);
-        changeDef.sourceModel.redoStateChange(changeDef.stateChange);
-        this.savedStateChanges.push(changeDef);
-        this.controller().redone(changeDef.stateChange, firstInTx);
+      while (idx >= 0 && this.revertedChanges[idx].__txId === currentTxId) {
+        var changeDef = this.revertedChanges.pop();
+        this.controller().redoing(changeDef.change, firstInTx,changeDef.context);
+        changeDef.sourceModel.redoChange(changeDef.change);
+        this.saveChanges.push(changeDef);
+        this.controller().redone(changeDef.change, firstInTx, changeDef.context);
         idx--;
         firstInTx = false;
       }
-      this.controller().modelStateChanged(this.savedStateChanges.length, this.revertedStateChanges.length);
+      this.controller().changeManagerUpdated(this.saveChanges.length, this.revertedChanges.length);
+      this.controller().redoCompleted();
     }
   },
   
-  undoStateChange: function(stateChange) {
-    var changeType = stateChange.changeType;
+  undoChange: function(change) {
+    var changeType = change.changeType;
     if (changeType === "objectAttrChanged") {
-      if (this.data !== stateChange.obj) this.data = stateChange.obj;
-      this._setObjAttr(stateChange.obj, stateChange.name, stateChange.oldValue);
+      //if (this.data !== change.obj) this.data = change.obj;
+      this._setObjAttr(change.obj, change.name, change.oldValue);
     } else if (changeType === "modelData") {
-      if (this.data !== stateChange.data) this.data = stateChange.data;
-      this._copyData(stateChange.oldData);
+      if (this.data === change.data) {
+        this._copyData(change.oldData);
+      }
     }
   },
   
-  redoStateChange: function(stateChange) {
-    var changeType = stateChange.changeType;
+  redoChange: function(change) {
+    var changeType = change.changeType;
     if (changeType === "objectAttrChanged") {
-      if (this.data !== stateChange.obj) this.data = stateChange.obj;
-      this._setObjAttr(stateChange.obj, stateChange.name, stateChange.value);
+      //if (this.data !== change.obj) this.data = change.obj;
+      this._setObjAttr(change.obj, change.name, change.value);
     } else if (changeType === "modelData") {
-      if (this.data !== stateChange.data) this.data = stateChange.data;
-      this._copyData(stateChange.newData);
+      if (this.data === change.data) {
+        this._copyData(change.newData);
+      }
     }
   },
   
@@ -1539,17 +1819,20 @@ Trillo.Model = Class.extend({
     this.txIdCounter += 1;
     this.txId = this.txIdCounter;
     this.txOn = true;
+    this.controller().txStarted();
     var self = this;
     return function() {
+      self.controller().txEnding();
       setTimeout(function() {
         self.txId = -1;
         self.txOn = false;
+        self.controller().txEnded();
       }, 0);
     };
   },
   
   isSaveNeeded: function() {
-    return this.savedStateChanges.length > 0;
+    return this.saveChanges.length > 0;
   },
   
   _copyData: function(sourceData) {
@@ -1582,17 +1865,17 @@ Trillo.Model = Class.extend({
       affected.push(arguments[i]);
     }
     
-    if (this.modelSpec.trackedData) {
-      affected.push(this.modelSpec.trackedData);
+    if (this.trackedData) {
+      affected.push(this.trackedData);
     }
     
     return affected;
   },
   
   isAffected: function(dt) {
-    var l = this.savedStateChanges, n = l.length, i, j, affected, st;
+    var l = this.saveChanges, n = l.length, i, j, affected, st;
     for (i=0; i<n; i++) {
-      st = l[i].stateChange;
+      st = l[i].change;
       affected = st.affected;
       if (affected) {
         for (j=0; j<affected.length; j++) {
@@ -1603,6 +1886,134 @@ Trillo.Model = Class.extend({
       }
     }
     return false;
+  },
+  
+  setContext: function(context) {
+    this.context = context;
+  },
+  
+  setTrackedData: function(trackedData) {
+    this.trackedData = trackedData;
+  },
+  
+  getContext: function() {
+    return this.context;
+  },
+  
+  setupModel: function() {
+    var data = this.data;
+    if (!data) {
+      return;
+    }
+    this.table = {};
+    if (Trillo.isTreeView(this._controller.viewSpec.type)) {
+      this.setupTreeData();
+    } else if (typeof data.length !== "undefined") {
+      this.updateTable(data);
+    } else if (data.uid) {
+      this.table[data.uid] = data;
+    }
+    this.createObserver();
+  },
+  
+  updateTable: function(dt) {
+    var table = this.table;
+    var n = dt.length;
+    var item;
+    for (var i=0; i<n; i++) {
+      item = dt[i];
+      if (item.uid) {
+        table[item.uid] = item;
+      }
+    }
+  },
+  
+  setupTreeData: function() {
+    var data = this.data;
+    if (data && data.children) {
+      this._setupTreeData(data.children, 0, null);
+    }
+    // the following flag is used to indicate to framework that this model's 
+    // data has tree specific attributes initialized.
+    this.__treeSetup = true; 
+  },
+  
+  _setupTreeData: function(l, lvl, parent) {
+    var arr = [];
+    this.__setupTreeData(l, lvl, parent, arr);
+    var prev = arr.length ? arr[0] : null;
+    for (var i=1; i<arr.length; i++) {
+      prev._next = arr[i];
+      arr[i]._prev = prev;
+      prev = arr[i];
+    }
+  },
+  
+  __setupTreeData: function(l, lvl, parent, arr) {
+    var n = l.length, item;
+    for (var i = 0; i < n; i++) {
+      item = l[i];
+      if (typeof item.uid === "undefined") {
+        item.uid = item.name;
+      }
+      arr.push(item);
+      this.table[item.uid] = item;
+      item._lvl = lvl;
+      item.parent = parent;
+      if (item.children) {
+        this.__setupTreeData(item.children, lvl + 1, item, arr);
+      }
+    }
+  },
+  
+  getScriptContext: function() {
+    // this is the context used in scripting apiAdapter parameters.
+    // Examples:
+    // {{data.attrName}} - for model data
+    // {{selectedObj.attrName}}  - for model selected obj
+    // {{parentData.attrName}} - for parent data
+    // {{parentSelectedObj.attrName}} - for parent selected obj
+    // {{closestSelectedObj.attrName}} - for closest selection in the hierarchy
+    // {{state.attrName}} - for any custom state updated by application code
+    
+    var ctx = {state: this.state};
+    var temp = this.data;
+    if (temp) {
+      ctx.data = temp;
+    }
+    temp = this.getSelectedObj();
+    if (temp) {
+      ctx.selectedObj = temp;
+    }
+    temp = this.parentModelData();
+    if (temp) {
+      ctx.parentData = temp;
+    }
+    temp = this.getParentSelectedObj();
+    if (temp) {
+      ctx.parentSelectedObj = temp;
+    }
+    temp = this.getClosestSelectedObj();
+    if (temp) {
+      ctx.closestSelectedObj = temp;
+    }
+    temp = this.getContextUid();
+    if (temp) {
+      ctx.contextUid = temp;
+    }
+    temp = this._controller.getParams();
+    if (temp) {
+      ctx.params = temp;
+    }
+    return ctx;
+  },
+  
+  getPaginationInfo: function() {
+    return this.paginationInfo;
+  },
+  
+  setPaginationInfo: function(pi) {
+    this.paginationInfo = pi;
   }
 });
 
@@ -1768,6 +2179,203 @@ Trillo.WebSocket = Class.extend({
   }
 });
 
+/**
+ * @file apiAdapterFactory.js
+ */
+
+Trillo.ApiAdapterFactory = Class.extend({
+  
+  initialize : function(options) {
+    
+  }, 
+  
+  createApiAdapter: function(apiSpec, controller) {
+    // make a copy of the given apiSpec so we can avoid inconsistency if
+    // passed apiSpec is changed by invoker
+    apiSpec = $.extend({}, apiSpec);
+    var apiAdapter;
+    apiAdapter = this.createApiAdapterForName(apiSpec, controller);
+    if (!apiAdapter) {
+      var appNamespace = Trillo.appNamespace;
+      apiAdapter = this.createApiAdapterForNS(appNamespace, apiSpec, controller);
+      if (!apiAdapter) {
+        // try common
+        apiAdapter = this.createApiAdapterForNS(window.Shared, apiSpec, controller);
+      }
+    }
+    return apiAdapter;
+  },
+  
+  createApiAdapterForName: function(apiSpec, controller) {
+    var clsName = apiSpec.impl;
+    if (clsName) {
+      var clsRef = Trillo.getRefByQualifiedName(clsName);
+      if (clsRef) {
+        return new clsRef(apiSpec, controller);
+      }
+    }
+    return null;
+  },
+
+  createApiAdapterForNS: function(ns, apiSpec, controller) {
+    var clsName = apiSpec.impl;
+    if (clsName) {
+      if (ns && ns[clsName]) {
+        return new ns[clsName](apiSpec, controller);
+      } else {
+        var clsRef = Trillo.getRefByQualifiedName(clsName);
+        if (clsRef) {
+          return new clsRef(apiSpec, controller);
+        }
+      }
+    }
+    return null;
+  }
+  
+});
+
+Trillo.ApiAdapter = Class.extend({
+  
+  initialize : function(apiSpec, controller) {
+    this.apiSpec = apiSpec;
+    this._controller = controller;
+  },
+  
+  controller: function() {
+    return this._controller;
+  },
+  
+  model: function() {
+    return this._controller ? this._controller.model() : null;
+  },
+  
+  isApiSpecChanged: function(apiSpec) {
+    return false;
+  },
+  
+  loadData: function(params) {
+    var deferred = $.Deferred();
+    this.dataLoaded(deferred, null);
+    return deferred.promise();
+  },
+  
+  dataLoaded: function(deferred, data) {
+    this.assignUid(data);
+    this._controller.model().updateData(data);
+    deferred.resolve(this);
+  },
+  
+  /* API adapter can provide options to be used for the registration of WEB Socket messages. */
+  getObserverOptions: function() {
+    return null;
+  },
+  
+  /* uid of object graph can be initialized in subclasses. */
+  assignUid: function(data) {
+  }
+});
+
+/* globals Mustache */
+Trillo.RestAdapter = Trillo.ApiAdapter.extend({
+  initialize : function(apiSpec, controller) {
+    this._super(apiSpec, controller);
+    this.serviceUrl = apiSpec.serviceUrl;
+    this.lastParams = null;
+  },
+  
+  isApiSpecChanged: function(apiSpec) {
+    return (this.lastUrl !== this.getFullUrl(this.lastParams));
+  },
+  
+  loadData: function(params) {
+    var deferred = $.Deferred();
+    var url = this.getFullUrl(params);
+    this.lastParams = params;
+    this.lastUrl = url;
+    $.ajax({
+      url: url,
+      type: 'get'
+    }).done($.proxy(this.dataLoaded, this, deferred)).
+    fail(function() {
+      deferred.reject({
+        errorMsg: "Failed to load model"
+      });
+    });
+    return deferred.promise();
+  },
+ 
+  getFullUrl: function(params) {
+    var ctx = this.model().getScriptContext();
+    if (params) {
+      ctx.params = $.extend({}, ctx.params, params);
+    }
+    var url = this.serviceUrl;
+    if (url && url.indexOf("{{") >= 0) {
+      url = Mustache.render(url, ctx);
+    }
+    if (this.apiSpec.query) {
+      var query = Mustache.render(this.apiSpec.query, ctx);
+      url = url + (url.indexOf("?") >= 0 ? "&" : "?") + query;
+    }
+    
+    return url;
+  }
+});
+
+Trillo.TestDataAdapter = Trillo.ApiAdapter.extend({
+  initialize : function(apiSpec, controller) {
+    this._super(apiSpec, controller);
+  },
+  
+  loadData: function() {
+    return this.loadTestData();
+  },
+ 
+  loadTestData: function() {
+    var deferred = $.Deferred();
+    if (this.data) {
+      /// data already available; may happen if a model is created from the data from the other model.
+      deferred.resolve(this);
+      return deferred.promise();
+    }
+    var self = this;
+   
+    $.ajax({
+      url: "/loadTestData?viewName=" + this.controller().view().name + "&appName=" + Trillo.appName,
+      type: 'get'
+    }).done($.proxy(this.dataLoaded, this, deferred)).
+    fail(function() {
+      deferred.reject({
+        errorMsg: "Failed to load test data"
+      });
+    });
+    
+    return deferred.promise();
+  },
+  
+  loadAllChartsTestData: function() {
+    var deferred = $.Deferred();
+    if (this.data) {
+      /// data already available; may happen if a model is created from the data from the other model.
+      deferred.resolve(this);
+      return deferred.promise();
+    }
+    var self = this;
+    
+    $.ajax({
+      url: "/loadAllChartsTestData?viewName=" + this.controller().view().name + "&appName=" + Trillo.appName,
+      type: 'get'
+    }).done($.proxy(this.dataLoaded, this, deferred)).
+    fail(function() {
+      deferred.reject({
+        errorMsg: "Failed to load chart test data"
+      });
+    });
+    
+    return deferred.promise();
+  }
+});
+
 /* globals autosize, moment */
 Trillo.ViewType = {
   Tree: "tree",
@@ -1786,7 +2394,10 @@ Trillo.ViewType = {
   Nav: "nav",
   Default: "default",
   Toc: "toc",
-  NavTree: "navTree"
+  NavTree: "navTree",
+  Menu: "menu",
+  FlexGrid: "flexGrid",
+  Dashboard: "dashboard"
 };
 
 Trillo.ImplClassByViewType = {
@@ -1808,6 +2419,32 @@ Trillo.ImplClassByViewType = {
   "navTree": "Trillo.NavTreeView"
 };
 
+Trillo.SupportsTestDataByViewType = {
+  "tree": "Trillo.TreeView",
+  "collection": "Trillo.CollectionView",
+  "table": "Trillo.CollectionView",
+  "grid": "Trillo.CollectionView",
+  "form": "Trillo.FormView",
+  "detail": "Trillo.DetailView",
+  "chart": "Trillo.ChartView",
+  "editableTable": "Trillo.EditableTableView"
+  // not supported
+  // actionTool
+  // container
+  // content
+  // dashboard
+  // flexCell    
+  // flexCol
+  // flexRow
+  // dropdown
+  // menu
+  // nav
+  // navTree
+  // page
+  // selector
+  // tab
+  // toc
+};
 
 Trillo.isValidViewType = function(type) {
   for (var t in Trillo.ViewType) {
@@ -1834,6 +2471,11 @@ Trillo.isFormView = function(type) {
   return (type === Trillo.ViewType.Form);
 };
 
+Trillo.isSelectionView = function(type) {
+  return (type === Trillo.ViewType.Tab || type === Trillo.ViewType.Nav ||
+      type === Trillo.ViewType.Selector || type === Trillo.ViewType.Menu);
+};
+
 Trillo.getViewTypeByImplClass = function(impl) {
   var type = null;
   $.each(Trillo.ImplClassByViewType, function(key, value) {
@@ -1845,6 +2487,10 @@ Trillo.getViewTypeByImplClass = function(impl) {
   return type;
 };
 
+Trillo.supportsTestData = function(type) {
+  return Trillo.SupportsTestDataByViewType[type];
+};
+
 Trillo.findAndSelf = function($e, cssSelector) {
   var f = $e.is(cssSelector);
   if (f) {
@@ -1854,22 +2500,19 @@ Trillo.findAndSelf = function($e, cssSelector) {
 };
 
 // converts given data to page (if not already page)
-Trillo.convertToPage = function(data) {
+Trillo.makePaginationInfo = function(data) {
   data = data || [];
-  if (data.items  && typeof data.items.length !== "undefined") {
-    return data;
-  }
+  
   if (typeof data.length === "undefined") {
     data = [data];
   }
   
-  var page = {};
-  page.items = data;
-  page.pageSize = data.length;
-  page.numberOfPages = 1;
-  page.totalNumberOfItems = page.pageSize;
-  page.pageNumber = 1;
-  return page;
+  var pi = {};
+  pi.pageSize = data.length;
+  pi.numberOfPages = 1;
+  pi.totalNumberOfItems = pi.pageSize;
+  pi.pageNumber = 1;
+  return pi;
 };
 
 Trillo.convertToArray = function(data) {
@@ -1880,34 +2523,16 @@ Trillo.convertToArray = function(data) {
   return [data];
 };
 
-// return list of objects from page (if it is a page)
-Trillo.listFromPage = function(data) {
-  data = data || [];
-  if (data.items  && typeof data.items.length !== "undefined") {
-    return data.items;
-  }
-  if (typeof data.length === "undefined") {
-    data = [data];
-  }
-  
-  return data;
-};
 
 Trillo.chartDataFromModelData = function(chartName, data) {
   if (!data) {
     return [];
-  }
-  if (data.items  && typeof data.items.length !== "undefined") {
-    return data.items;
   }
   if (typeof data.length !== "undefined") {
     return data;
   }
   var dt = data[chartName];
   if (dt) {
-    if (dt.items  && typeof dt.items.length !== "undefined") {
-      return dt.items;
-    }
     if (typeof dt.length !== "undefined") {
       return dt;
     }
@@ -1931,7 +2556,7 @@ Trillo.setFieldValue = function($e, value, readonly) {
       Trillo.setSelectOptionsFromEnum($e, value);
     }
     $e.val(value);
-    $e.parent().find(".js-temp-elem-for-read-only").remove();
+    $e.parent().find(".js-temp-elem-for-readonly").remove();
     if (!readonly) {
       $e.show();
       /*
@@ -1947,7 +2572,7 @@ Trillo.setFieldValue = function($e, value, readonly) {
       if (tagName === "select") {
         value = $e.find("option:selected").text(); // will get display value
       }
-      $e.after('<span class="js-temp-elem-for-read-only">' + value + '</span>');
+      $e.after('<span class="js-temp-elem-for-readonly">' + value + '</span>');
     }
   } else if (tagName === 'img') {
     $e.attr("src", value);
@@ -1955,12 +2580,32 @@ Trillo.setFieldValue = function($e, value, readonly) {
     value = Trillo.formatValue($e, value); // will get display value
     dt = $e.dataOrAttr("display-type");
     if (dt === "css-class") {
-      $e.addClass(value);
+      if (value) {
+        $e.addClass(value);
+        $e.attr("_value_as_css_class_", value);
+      } else {
+        var temp = $e.attr("_value_as_css_class_");
+        if (temp) {
+          $e.removeClass(value);
+          $e.removeAttr("_value_as_css_class_");
+        }
+      }
     } else {
       $e.html(typeof value === "undefined" ? "" : ("" + value));
     }
   }
 };
+
+Trillo.setReadonlyFieldValue = function($e, value, readonly) {
+  var tagName = $e.prop("tagName").toLowerCase();
+  if (tagName === 'img') {
+    $e.attr("src", value);
+  } else {
+    value = Trillo.formatValue($e, value); // will get display value
+    $e.html(typeof value === "undefined" ? "" : ("" + value));
+  }
+};
+
 
 Trillo.resizeAllTextArea = function($e) {
   /*
@@ -1981,7 +2626,9 @@ Trillo.resizeAllTextArea = function($e) {
 };
 
 Trillo.timeTickFormat = {
-  format: function (value) { return moment(value).format("M/D H:m"); },
+  format: function (value) { 
+    return moment(value).format("M/D H:m"); 
+  },
   fit: true,
   culling: {
     max: 2
@@ -2030,8 +2677,8 @@ Trillo.isCheckxoxOrRadio = function($e) {
   return $e.is(":checkbox") || $e.is(":radio");
 };
 
-Trillo.isButton = function($e) {
-  return $e.is(":button") || $e.is(":reset") || $e.is(":reset");
+Trillo.isActionElement = function($e) {
+  return $e.dataOrAttr("nm") && ($e.is(":button") || $e.is(":reset") || $e.is(":reset") || $e.is("a") || $e.hasClass("js-tool"));
 };
 
 Trillo.getInputs = function($e) {
@@ -2040,7 +2687,7 @@ Trillo.getInputs = function($e) {
 };
 
 Trillo.getReadonlyFields = function($e) {
-  return $e.find('.js-readonly-content');
+  return $e.find('.js-readonly-content', 'img[nm]');
 };
 
 Trillo.getFieldValue = function($e) {
@@ -2061,6 +2708,65 @@ Trillo.getClosestNamedElem = function($e) {
   return null;
 };
 
+/* Label elements have for attribute. */
+Trillo.getClosestLabelElem = function($e) {
+  while ($e && ($e.prop("nodeName") || "").toLowerCase() !== "html") {
+    if ($e.attr("for")) return $e;
+    $e = $e.parent();
+  }
+  return null;
+};
+
+Trillo.setDisabled = function(el, f) {
+  $.each(el, function() {
+    if (f) {
+      $(this).attr("disabled", true);
+    } else {
+      $(this).removeAttr("disabled");
+    }
+  });
+};
+
+Trillo.getActualTarget = function(ev) {
+  var $e = $(ev.target);
+  var tag = $e.prop("tagName").toLowerCase();
+  if (!$e.hasClass("js-tool") && tag !== "a" && tag !== "button") {
+    var $e2 = $e.find("button");
+    if ($e2.length === 0) {
+      $e2 = $e.find("a");
+    }
+    if ($e2.length === 0) {
+      $e2 = $e.parent();
+      tag = $e2.prop("tagName").toLowerCase();
+      if (tag !== "a" && tag !== "button") {
+        return null;
+      }
+    }
+    $e = $e2;
+  }
+  return $e;
+};
+
+Trillo.belongsToView = function($te, viewName) {
+  // an element, that has "for-view" attribute, is matched with the view name.
+  // if it does not have "for-view" attr or the value of attr is same as the view name then
+  // the element belongs to this view.
+  if ($te.length === 0) {
+    return false;
+  }
+  var temp = $te.dataOrAttr("for-view");
+  return !temp || temp === viewName;
+};
+
+
+Trillo.hideCurrentOverlays = function(hideCtxMenu, hidePopup) {
+  if (hideCtxMenu) {
+    Trillo.contextMenuManager.hideCurrentContextMenu();
+  }
+  if (hidePopup) {
+    Trillo.popoverManager.hideCurrentPopup();
+  }
+};
 
 
 /**
@@ -2089,7 +2795,7 @@ Trillo.ViewManager = Class.extend({
     var deferred = $.Deferred();
     var entry = this.viewTable[viewName];
     if (entry) {
-      this.processView(deferred, entry.html, entry.hasTemplateTag);
+      this.processView(deferred, entry.html);
     } else {
       $.ajax({
         url: Trillo.Config.viewPath + viewName + Trillo.Config.viewFileExtension,
@@ -2107,7 +2813,7 @@ Trillo.ViewManager = Class.extend({
   }, 
   
   viewLoaded: function(deferred, viewName, result) {
-    var html, hasTemplateTag, entry;
+    var html, entry;
     if (Trillo.appContext.isTrilloServer) {
       if (result.status === "failed") {
         Trillo.log.error(result.message || result.status);
@@ -2121,82 +2827,25 @@ Trillo.ViewManager = Class.extend({
     } else {
       html = result;
     }
-    hasTemplateTag = html.indexOf("{{") >= 0;
-    entry = this.viewTable[viewName] = {html: html, hasTemplateTag : hasTemplateTag};
-    this.processView(deferred, entry.html, entry.hasTemplateTag);
+    entry = this.viewTable[viewName] = {html: html};
+    this.processView(deferred, entry.html);
   },
   
-  processView: function(deferred, viewHtml, hasTemplateTag) {
+  processView: function(deferred, viewHtml) {
     var $c = $("<div></div>");
     $c.html(viewHtml);
-    var viewSpecs = Trillo.getSpecObject($c, "script[spec='view']"); // also removes matching elements.
+    var viewSpec = Trillo.getSpecObject($c, "script[spec='view']"); // also removes matching elements.
+    var chartSpecs = Trillo.getSpecObject($c, "script[spec='chart']"); // also removes matching elements.
+    if (chartSpecs) {
+      if (!(chartSpecs instanceof Array)) {
+        chartSpecs = [chartSpecs];
+      }
+      viewSpec.chartSpecs = chartSpecs;
+    }
+    
     var $e = $($c.children()[0]);
     $e.detach();
-    deferred.resolve({$e : $e, viewSpecs: viewSpecs, hasTemplateTag: hasTemplateTag});
-  }
-  
-});
-
-Trillo.ChartManager = Class.extend({
-  
-  chartTable : {},
-  
-  initialize : function(options) {
-    
-  }, 
-  
-  
-  getChartList : function(chartNames) {
-    var deferred = $.Deferred();
-    var chartsToRetrieve = "";
-    var charts = [];
-    var ch, chName;
-    for (var i=0; i<chartNames.length; i++) {
-      chName = chartNames[i];
-      ch = this.chartTable[chName];
-      if (ch) {
-        charts.push(ch);
-      } else {
-        chartsToRetrieve += (chartsToRetrieve === "" ? "" : "," ) + chName;
-      }
-    }
-    if (charts.length === chartNames.length) {
-      deferred.resolve(charts);
-    } else {
-      $.ajax({
-        url: "/chartList/?chartNames=" + chartsToRetrieve + "&appName=" + Trillo.appName,
-        type: 'get',
-        datatype : "application/json"
-      }).done($.proxy(this.chartsLoaded, this, deferred, chartNames)).
-      fail(function() {
-        deferred.reject({
-          errorMsg: "Failed to chart"
-        });
-      });
-    }
-   
-    return deferred.promise();
-  }, 
-  
-  chartsLoaded: function(deferred, chartNames, data) {
-    var i;
-    var ch;
-    for (i=0; i<data.length; i++) {
-      ch = $.parseJSON(data[i].content);
-      ch.name = data[i].name;
-      ch.displayName = ch.displayName || data[i].displayName || data[i].name;
-      this.chartTable[data[i].name] = ch;
-    }
-    var charts = [];
-    var chName;
-    for (i=0; i<chartNames.length; i++) {
-      chName = chartNames[i];
-      ch = this.chartTable[chName];
-      if (ch) {
-        charts.push(ch);
-      }
-    }
-    deferred.resolve(charts);
+    deferred.resolve({$e : $e, viewSpec: viewSpec});
   }
   
 });
@@ -2205,8 +2854,6 @@ Trillo.Builder = Class.extend({
   
   initialize : function(options) {
     this.options = options;
-    this.navHistory = {};
-    this.paramsHistory = {};
   }, 
   
   _getApp$Elem: function(routeSpecArr) {
@@ -2241,9 +2888,9 @@ Trillo.Builder = Class.extend({
   
   buildAppView: function(route) {
     var $body = $("body");
-    var $e = this._getApp$Elem(this.getRouteSpecsFromRoute(route));
+    var $e = this._getApp$Elem(Trillo.getRouteSpecsFromRoute(route));
    
-    var viewSpec = this.udpdateViewSpecs($body, Trillo.pageName, null, $body.html().indexOf("{{") > 0);
+    var viewSpec = this.udpdateViewSpecs($body, null, $body.html().indexOf("{{") > 0);
    
     if (!viewSpec) {
       viewSpec = {};
@@ -2266,6 +2913,10 @@ Trillo.Builder = Class.extend({
     // mark this view-spec to indicate that it represents application
     viewSpec.isAppView = true;
     
+    // get params from route (URL) and merge with viewSpec.params
+    var params = Trillo.getAppParams(route);
+    viewSpec.params = $.extend(viewSpec.params, params);
+    
     
     if (!viewSpec.modelSpec) {
       viewSpec.modelSpec = {
@@ -2280,6 +2931,9 @@ Trillo.Builder = Class.extend({
     if (viewSpec) {
       var promise = this.initMvc($e, viewSpec);
       promise.done(function(view) {
+        if (view.postSetup) {
+          view.postSetup(view);
+        }
         self.processEmbeddedViews([view], resDeferred);
         //resDeferred.resolve(view);
       });
@@ -2321,16 +2975,16 @@ Trillo.Builder = Class.extend({
    */
   build: function(route, prevView) {
     
-    var routeSpecArr = this.getRouteSpecsFromRoute(route);
+    var routeSpecArr = Trillo.getRouteSpecsFromRoute(route);
     
     var resDeferred = $.Deferred();
-   
+    prevView.routingToNextView(routeSpecArr, 0);
     this._build(0, routeSpecArr, prevView, resDeferred, [], "");
     
     return resDeferred.promise();
   },
   
-  _build: function(idx, routeSpecArr, prevView, resDeferred, listOfViews, parentPath) {
+  _build: function(idx, routeSpecArr, prevView, resDeferred, listOfViews) {
     if (idx >= routeSpecArr.length) {
       resDeferred.resolve(listOfViews);
       return;
@@ -2338,7 +2992,7 @@ Trillo.Builder = Class.extend({
     var currentView = prevView ? prevView.nextView() : null;
     var subrouteSpec = routeSpecArr[idx];
     
-    if (currentView && currentView.name !== subrouteSpec.name) { 
+    if (currentView && currentView.name !== Trillo.getViewNameFromPath(subrouteSpec.name)) { 
       // new mvc context, discard old one
       currentView.markForClearing(); // will release the resources
       currentView = null; // new will be created below
@@ -2354,7 +3008,7 @@ Trillo.Builder = Class.extend({
     } else {
       // get next view spec defined from previous view.
       // If available it overrides properties of ViewSpec in the HTML file.
-      viewSpec = prevView.getNextViewSpec(subrouteSpec.name);
+      viewSpec = prevView.viewSpec.getNextViewSpecByPath(subrouteSpec.name);
      
       if (!viewSpec) {
         // create a view-spec with name
@@ -2363,15 +3017,6 @@ Trillo.Builder = Class.extend({
         viewSpec.initFromPath(subrouteSpec.name);
       }
     }
-    if ($.isEmptyObject(subrouteSpec.params)) {
-      // get last selected params from the history if available
-      var p = this.paramsHistory[parentPath + "/" + subrouteSpec.name];
-      if (p) {
-        subrouteSpec.params = p;
-      }
-    }
-    this.navHistory[parentPath] = subrouteSpec;
-    this.paramsHistory[parentPath + "/" + subrouteSpec.name] = subrouteSpec.params;
     viewSpec.params = subrouteSpec.params;
     var promise = this.init(viewSpec, currentView, prevView); 
     var self = this;
@@ -2379,22 +3024,28 @@ Trillo.Builder = Class.extend({
       currentView = view;
       var subroute;
       var i;
+      var parentPath = Trillo.getRouteUptoIndex(routeSpecArr, idx-1, false);
+      var myPath = Trillo.getSubrouteAsStr(routeSpecArr[idx], false);
+      var myQuery = Trillo.getQueryStr(routeSpecArr[idx]);
+      var paramStr, nextPath;
+      
+      Trillo.navHistory.add(parentPath, myPath, myQuery);
       listOfViews.push(view);
+      if (view.postSetup) {
+        view.postSetup(view);
+      }
       // The following paths or a part of it may lead to the internal route within view and thus consumed by it.
-      // It will return number of paths consumed and based on that we will move the index forward and also
-      // update "parentPath" accordingly.
+      // It will return number of paths consumed and based on that we will move the index forward.
       var forward = view.doInternalRouting(routeSpecArr, idx+1);
       if (forward > 0) {
-        var idx2 = idx + 1 + forward;
+        var idx2 = idx + forward;
         if (idx2 > routeSpecArr.length) {
-          idx2 = routeSpecArr.length;
-        }
-        // idx2 may have been changed above, check again if it is greater than idx + 1
-        if (idx2 > idx + 1) {
-          for (i=idx+1; i <idx2; i++) {
-            parentPath = parentPath + "/" + routeSpecArr[i].name;
-          }
-          idx = idx2 - 1;
+          idx = routeSpecArr.length;
+        } else {
+          idx = idx2; 
+          // update paths to match the movement of idx
+          myPath = routeSpecArr[idx].name;
+          parentPath = routeSpecArr[idx-1].name;
         }
       }
       
@@ -2402,7 +3053,7 @@ Trillo.Builder = Class.extend({
           /* || view.viewSpec.type === Trillo.ViewType.List */)) {
         // check if the given route can be followed. In case of a Tree or List type view (which represent heterogeneous collections) 
         // the selected object specified in the URL may have been deleted and as a result the current selection may 
-        // have stripped off the route.
+        // have to be stripped off the route.
         subroute = view.getNextViewName();
         if (subroute) {
           if (routeSpecArr[idx+1].name !== subroute) {
@@ -2411,13 +3062,12 @@ Trillo.Builder = Class.extend({
         }
       }
       if (idx + 1 === routeSpecArr.length && !Trillo.isPreview) {
-        var historySpec = self.navHistory[parentPath + "/" + subrouteSpec.name];
         //if (spec) {
           //routeSpecArr.push(spec);
         //} else {
           // last view is created.
           // check if the view supports default next route.
-          subroute = view.getNextViewName(historySpec, subrouteSpec.name);
+          subroute = view.getNextViewName(Trillo.getFullPath(parentPath, myPath));
           if (subroute) {
             routeSpecArr.push({
               name: subroute,
@@ -2427,8 +3077,15 @@ Trillo.Builder = Class.extend({
         //}
       }
       if ((idx + 1) < routeSpecArr.length) {
+        if ($.isEmptyObject(routeSpecArr[idx+ 1].params)) {
+          nextPath = Trillo.getSubrouteAsStr(routeSpecArr[idx+ 1], false);
+          paramStr =  Trillo.navHistory.getParams(Trillo.getFullPath(parentPath, myPath), nextPath);
+          if (paramStr) {
+            routeSpecArr[idx+1].params = Trillo.queryStrToParams(subroute + "?" + paramStr);
+          }
+        }
         view.routingToNextView(routeSpecArr, idx+1);
-        self._build(idx+1, routeSpecArr, currentView, resDeferred, listOfViews, parentPath + "/" + subrouteSpec.name);
+        self._build(idx+1, routeSpecArr, currentView, resDeferred, listOfViews);
       } else {
         if (currentView.nextView()) {
           currentView.nextView().markForClearing();
@@ -2473,6 +3130,9 @@ Trillo.Builder = Class.extend({
     var promise = this.init(viewSpec, viewSpec.view, extEmbeddedSpec.parentView); 
     var self = this;
     promise.done(function(view) {
+      if (view.postSetup) {
+        view.postSetup(view);
+      }
       // an embedded view may have other embedded views, queue them up
       var embeddedSpecs = view.viewSpec.embeddedSpecs;
       if (embeddedSpecs && embeddedSpecs.length) {
@@ -2504,8 +3164,16 @@ Trillo.Builder = Class.extend({
         $e.detach();
         currentView = this.createView($e, viewSpec, prevView);
       } else if (viewSpec.elementSelector) {
-        $e = $(viewSpec.elementSelector);
+        $e = prevView ? $(viewSpec.elementSelector, prevView.$elem()) : $(viewSpec.elementSelector);
         currentView = this.createView($e, viewSpec, prevView);
+      } else if (viewSpec.embedded || viewSpec.autoLoad) {
+        var sel = '[nm="' + viewSpec.name + '"]';
+        $e = prevView ? $(sel, prevView.$elem()) : $(sel);
+        if ($e.length) {
+          currentView = this.createView($e, viewSpec, prevView);
+        } else {
+          return this.loadTemplateThenInit(viewSpec, prevView);
+        }
       } else {
         // template is loaded asynchronously therefore we return with a promise here.
         return this.loadTemplateThenInit(viewSpec, prevView);
@@ -2523,7 +3191,7 @@ Trillo.Builder = Class.extend({
       var $e = viewDetail.$e;
       // before we process this view, look for its spec defined in the file and also
       // add any embedded specs to its spec
-      var viewSpec2 = self._udpdateViewSpecs(viewDetail.viewSpecs, viewSpec.name, viewSpec, viewDetail.hasTemplateTag);
+      var viewSpec2 = self._udpdateViewSpecs(viewDetail.viewSpec, viewSpec);
       if (viewSpec2) {
         // super impose inline on the top of viewSpec2
         viewSpec = $.extend({}, viewSpec2, viewSpec);
@@ -2563,7 +3231,7 @@ Trillo.Builder = Class.extend({
       impl = "Trillo.View";
     }
     
-    console.debug("Creating view: " + viewSpec.name + ", " + impl);
+    debug.debug("Creating view: " + viewSpec.name + ", " + impl);
     
     var clsRef = Trillo.getRefByQualifiedName(impl);
     if (!clsRef) {
@@ -2582,6 +3250,12 @@ Trillo.Builder = Class.extend({
     return view;
   },
   
+  modelReloadRequired: function(viewName, listOfViews) {
+    if (listOfViews) {
+      return listOfViews.indexOf(viewName) >= 0;
+    }
+    return true;
+  },
   /*
    * This is called to refresh models and views hierarchy starting with this view.
    * view - top view of the view hierarchy to be refreshed
@@ -2589,33 +3263,33 @@ Trillo.Builder = Class.extend({
    * by event from the server or form submission, this view may already have the latest data so there is
    * no need to load it. The subsequent will have to be reloaded since the context (as defined by parent model has changed).
    */ 
-  refresh: function(view, modelLoadRequired) {
+  refresh: function(view, listOfViews) {
     var self = this;
     var resDeferred = $.Deferred();
     var promise;
-    if (modelLoadRequired) {
+    if (this.modelReloadRequired(view.name, listOfViews)) {
       promise = this.initM(view, true);
     } else {
       promise = view.repeatShowUsingModel();
     }
     promise.done(function() {
       if (view.nextView()) {
-        self.refresh(view.nextView(), modelLoadRequired).done(function() {
-          self.refreshEmbeddedViews(view, resDeferred, 0, modelLoadRequired);
+        self.refresh(view.nextView(), listOfViews).done(function() {
+          self.refreshEmbeddedViews(view, resDeferred, 0, listOfViews);
         });
        } else {
-         self.refreshEmbeddedViews(view, resDeferred, 0, modelLoadRequired);
+         self.refreshEmbeddedViews(view, resDeferred, 0, listOfViews);
        }
     });
     return resDeferred.promise();
   },
   
-  refreshEmbeddedViews: function(view, resDeferred, idx, modelLoadRequired) {
+  refreshEmbeddedViews: function(view, resDeferred, idx, listOfViews) {
     var embeddedViews = view.embeddedViews();
     var self = this;
     if (idx < embeddedViews.length) {
-      this.refresh(embeddedViews[idx], true).done(function() {
-        self.refreshEmbeddedViews(view, resDeferred, idx+1, modelLoadRequired);
+      this.refresh(embeddedViews[idx], listOfViews).done(function() {
+        self.refreshEmbeddedViews(view, resDeferred, idx+1, listOfViews);
       });
     } else {
       resDeferred.resolve(view);
@@ -2623,23 +3297,8 @@ Trillo.Builder = Class.extend({
   },
   
   initM: function(view, forceModelRefresh) {
-    var viewSpec = view.viewSpec;
-    var modelSpec = viewSpec.modelSpec;
-    modelSpec = $.extend({type: "local"}, modelSpec);
-    modelSpec.params = modelSpec.params || {};
-    modelSpec.viewName = viewSpec.name;
-    // reset modelSpec
-    modelSpec._newData = null; 
-    modelSpec.parentData = null;
-    viewSpec.modelSpec = modelSpec;
-    if (view.updateModel) {
-      // if view specifies upateModel, give it precedence
-      view.updateModel(modelSpec, viewSpec.params);
-    }
-    if (view.controller().updateModel) {
-      view.controller().updateModel(modelSpec, viewSpec.params);
-    }
-    return view.show(modelSpec, forceModelRefresh);
+    view.viewSpec.modelSpec = view.viewSpec.modelSpec || {}; // initialize viewSpec model to empty if not present.
+    return view.show(forceModelRefresh);
   },
   
   createController: function(viewSpec, prevView) {
@@ -2653,7 +3312,7 @@ Trillo.Builder = Class.extend({
       }
       if (!ctrl) {
         if (viewSpec.controller) {
-          Trillo.log.warning("Controller class '" + viewSpec.controller + "' not found, using default controller.");
+          debug.warn("Controller class '" + viewSpec.controller + "' not found, using default controller.");
         }
         ctrl = new Trillo.Controller(viewSpec);
       }
@@ -2701,98 +3360,45 @@ Trillo.Builder = Class.extend({
     return false;
   },
   
-  udpdateViewSpecs: function($e, name, parentViewSpec, hasTemplateTag) {
-    var viewSpecs = Trillo.getSpecObject($e, "script[spec='view']");
-    return this._udpdateViewSpecs(viewSpecs, name, parentViewSpec, hasTemplateTag);
+  udpdateViewSpecs: function($e, parentViewSpec) {
+    var viewSpec = Trillo.getSpecObject($e, "script[spec='view']");
+    return this._udpdateViewSpecs(viewSpec, parentViewSpec);
   },
   
-  _udpdateViewSpecs: function(viewSpecs, name, parentViewSpec, hasTemplateTag) {
-    if (!viewSpecs) {
+  _udpdateViewSpecs: function(viewSpec, parentViewSpec) {
+    if (!viewSpec) {
       return null;
     }
-    // self spec is a view-spec with the same name as the view file itself.
-    var selfSpec = null; 
-    var self = this;
-    var specName;
     var embeddedSpecs = [];
-    if (!name) {
-      name = "";
+    viewSpec.trigger = viewSpec.trigger || viewSpec.name;
+    if (!viewSpec.getMyPath) {
+      $.extend(viewSpec, Trillo.ViewSpecFuncs);
     }
-    $.each( viewSpecs, function( key, spec ) {
-      specName = key;
-      spec.name = specName;
-      spec.trigger = spec.trigger || spec.name;
-      spec.hasTemplateTag = hasTemplateTag;
-      if (!spec.getMyPath) {
-        $.extend(spec, Trillo.ViewSpecFuncs);
-      }
-      if (specName === name || name === "") { // if the name is "" then the first viewSpec is considered my spec
-        // my spec
-        name = specName; // in case it was space
-        selfSpec = spec;
-      } else {
-        // embedded spec
-        spec.embedded = true;
-        embeddedSpecs.push(spec);
-      }
-      var nextViewSpecs = spec.nextViewSpecs;
-      if (nextViewSpecs) {
-        $.each( nextViewSpecs, function( key2, spec2 ) {
-          $.extend(spec2, Trillo.ViewSpecFuncs);
-        });
-      }
-    });
-    if (selfSpec && embeddedSpecs.length) {
-      selfSpec.embeddedSpecs = embeddedSpecs;
-    }
-    return selfSpec;
-  },
-  
-  getRouteSpecsFromRoute: function(route) {
-    var routeSpecArr = [];
-    
-    if (!route || route.length === 0) {
-      return routeSpecArr;
-    }
-    var sl = route.split("/");
-    var subroute;
-    for (var i=0; i<sl.length; i++) {
-      subroute = sl[i];
-      routeSpecArr.push({
-        name: this.getName(subroute),
-        params: this.getParams(subroute)
+    var nextViewSpecs = viewSpec.nextViewSpecs;
+    if (nextViewSpecs) {
+      $.each( nextViewSpecs, function( key2, spec2 ) {
+        $.extend(spec2, Trillo.ViewSpecFuncs);
+        if (spec2.embedded || spec2.autoLoad) {
+          embeddedSpecs.push(spec2);
+        }
       });
     }
-    return routeSpecArr;
-  },
-  
-  getName: function(subroute) {
-    var idx = subroute.indexOf(";");
-    if (idx >= 0) {
-      return $.trim(subroute.substring(0,idx));
+    
+    if (embeddedSpecs.length) {
+      var self = this;
+      $.each( embeddedSpecs, function( key2, spec2 ) {
+        if (viewSpec.nextView === spec2.name) {
+          viewSpec.nextView = null; // the next view will be processed as an embedded view. It does not represent the actual nextView (in URL).
+        }
+        Trillo.deleteFromArray(nextViewSpecs, spec2);
+        self._udpdateViewSpecs(spec2, viewSpec);
+      });
+      viewSpec.embeddedSpecs = embeddedSpecs;
     }
-    return subroute;
-  },
-  
-  getParams: function(subroute) {
-    var idx = subroute.indexOf(";");
-    if (idx >= 0) {
-      subroute = subroute.substring(0,idx) + "?" + subroute.substring(idx+1);
-      subroute.replace(";", "&");
-    }
-    return $.url(subroute).param();
-  },
- 
-  getSubrouteAsStr: function(spec) {
-    var str = spec.name;
-    if (str.length === 0) return "";
-    var query = "";
-    $.each(spec.params, function(key, value) {
-      query = (query.length ? ";" : "") + (key + "=" + value);
-    });
-    str += (query.length ? ";"  + query : "");
-    return str;
+
+    return viewSpec;
   }
+  
 });
 
 Trillo.ViewSpecFuncs = {
@@ -2850,7 +3456,7 @@ Trillo.ViewSpecFuncs = {
       var specs = this.nextViewSpecs;
       var res = null;
       if (specs) {
-        $.each(specs, function( key, spec ) {
+        $.each(specs, function( idx, spec ) {
           if (spec.parentPath === parentPath) {
             res = spec;
             return false;
@@ -2858,9 +3464,151 @@ Trillo.ViewSpecFuncs = {
         });
       }
       return res; 
+    },
+    
+    getNextViewSpecByPath: function(path) {
+      return this.getNextViewSpecByTrigger(Trillo.getTriggerFromPath(path));
+    },
+    
+    /* do deep search. Required for menu items. */
+    getNextViewSpecByTrigger: function(trigger) {
+      var res = this._getNextViewSpecByTrigger(this.nextViewSpecs, trigger);
+      if (!res) {
+        res = this._getNextViewSpecByTrigger(this.embeddedSpecs, trigger);
+      }
+      return res;
+    },
+    
+    _getNextViewSpecByTrigger: function(l, trigger) {
+      if (!l) {
+        return null;
+      }
+      var res = null;
+      var trigger2;
+      var self = this;
+      $.each(l, function( idx, spec ) {
+        trigger2 = spec.trigger || spec.name;
+        if (trigger2 === trigger) {
+          res = spec;
+          return false;
+        } else if (spec.embedded || spec.autoLoad) { // a path may be due to an external view navigated from an embedded view.
+          res = self._getNextViewSpecByTrigger(spec.nextViewSpecs, trigger);
+          if (!res) {
+            res = self._getNextViewSpecByTrigger(spec.embeddedSpecs, trigger);
+          }
+          if (res) {
+            return false;
+          }
+        }
+      });
+      
+      return res;
+    },
+    
+    setParam: function(name, value) {
+      this.params[name] = value;
+    },
+    
+    getParam: function(name) {
+      return this.params[name];
+    },
+    
+    getParams: function() {
+      return this.params;
     }
 };
 
+Trillo.getRouteSpecsFromRoute = function(route) {
+  var routeSpecArr = [];
+  
+  if (!route || route.length === 0) {
+    return routeSpecArr;
+  }
+  var sl = route.split("/");
+  var subroute, spec;
+  for (var i=0; i<sl.length; i++) {
+    subroute = sl[i];
+    spec = {
+        name: Trillo.getRouteName(subroute),
+        params: Trillo.getRouteParams(subroute)
+    };
+    if (spec.name) { // if route is simple page parameter then the spec.name will be ""
+      routeSpecArr.push(spec);
+    }
+  }
+  return routeSpecArr;
+};
+
+Trillo.getRouteName = function(subroute) {
+  var idx = subroute.indexOf(";");
+  if (idx >= 0) {
+    return $.trim(subroute.substring(0,idx));
+  }
+  return subroute;
+};
+
+Trillo.getAppParams = function(route) {
+  var idx = route.indexOf(";");
+  if (idx === 0) {
+    var sl = route.split("/");
+    return Trillo.getRouteParams("a" + sl[0]);
+  }
+  return {};
+};
+
+Trillo.getRouteParams = function(subroute) {
+  var idx = subroute.indexOf(";");
+  if (idx >= 0) {
+    subroute = subroute.substring(0,idx) + "?" + subroute.substring(idx+1);
+  }
+  return Trillo.queryStrToParams(subroute);
+};
+
+Trillo.queryStrToParams = function(queryStr) {
+  if (!queryStr) {
+    return {};
+  }
+  queryStr = queryStr.replace(/;/g, "&");
+  return $.url(queryStr).param();
+};
+
+Trillo.getSubrouteAsStr = function(spec, includeQuery) {
+  var str = spec.name;
+  if (str.length === 0) return "";
+  if (includeQuery) {
+    var query = Trillo.getQueryStr(spec);
+    str += (query.length ? ";"  + query : "");
+  }
+  return str;
+};
+
+Trillo.getQueryStr = function(spec) {
+  var query = "";
+  if (spec.params) {
+    $.each(spec.params, function(key, value) {
+      if (key.indexOf("__") !== 0) { // a param's name starting with "_" is not stored in the history
+        query = (query.length ? ";" : "") + (key + "=" + value);
+      }
+    }); 
+  }
+  return query;
+};
+
+// inclusive 'index'
+Trillo.getRouteUptoIndex = function(routeSpecArr, idx, includeQuery) {
+  if (idx < 0) {
+    return "";
+  }
+  var str = "";
+  for (var i=0; i<=idx; i++) {
+    str += (i > 0 ? "/" : "") + Trillo.getSubrouteAsStr(routeSpecArr[i], includeQuery);
+  }
+  return str;
+};
+
+Trillo.getFullPath = function(parentPath, lastPath) {
+  return (parentPath ? parentPath + "/" : "") + lastPath;
+};
 Trillo.BaseController = Class.extend({
   
   initialize: function(viewSpec) {
@@ -2899,8 +3647,16 @@ Trillo.BaseController = Class.extend({
     return this._model;
   },
   
+  apiAdapter: function() {
+    return this._apiAdapter;
+  },
+  
   modelData: function() {
     return this._model.data;
+  },
+  
+  parentModel: function() {
+    return this._parentController ? this._parentController.model() : null;
   },
   
   parentModelData: function() {
@@ -2923,10 +3679,15 @@ Trillo.BaseController = Class.extend({
     this._embeddedControllers.push(embeddedController);
   },
   
+  removeEmbeddedController: function(embeddedController) {
+    this._embeddedControllers.splice(this._embeddedControllers.indexOf(embeddedController), 1);
+  },
+  
   clear: function() {
   },
   
-  createModel: function(modelSpec) {
+  createModel: function(modelSpec, apiSpec) {
+    var promise;
     var myDeferred = $.Deferred();
     
     debug.debug("BaseController.createModel() - creating new model for: " + this.viewSpec.name);
@@ -2934,27 +3695,104 @@ Trillo.BaseController = Class.extend({
       this._model.clear();
     }
     this._model = Trillo.modelFactory.createModel(modelSpec, this);
-    var promise;
-    if (Trillo.isPreview || Trillo.useTestData) {
-      promise = this.viewSpec.type === Trillo.ViewType.Chart && this.viewSpec.params.charts ? 
-        this._model.loadChartTestData(this.viewSpec.charts[0]) :
-        this._model.loadTestData(this.viewSpec.name);
-       
+    if ((!apiSpec && Trillo.supportsTestData(this.viewSpec.type)) && (Trillo.isPreview || Trillo.useTestData)) {
+      this._apiAdapter = new Trillo.TestDataAdapter(apiSpec, this);
+      promise = this._apiAdapter.loadData(this.viewSpec.name);
       promise.done($.proxy(this.modelDataLoaded, this, myDeferred));
+      promise.fail(function(result) {
+        myDeferred.reject(result);
+      });
+    } else if (apiSpec) {
+      this._apiAdapter = Trillo.apiAdapterFactory.createApiAdapter(apiSpec, this);
+      promise = this._apiAdapter.loadData();
+      promise.done($.proxy(this.modelDataLoaded, this, myDeferred));
+      promise.fail(function(result) {
+        myDeferred.reject(result);
+      });
     } else {
-      promise = this._model.loadData();
-      promise.done($.proxy(this.modelDataLoaded, this, myDeferred));
+      this._model.updateData(this.getModelData(modelSpec));
+      this.modelDataLoaded(myDeferred);
     }
-    promise.fail(function(result) {
-      myDeferred.reject(result);
-    });
-   
     return myDeferred.promise();
   },
   
-  modelDataLoaded: function(myDeferred, model) {
-    this.postProcessModel(model);
-    myDeferred.resolve(model);
+  isModelDataChanged: function() {
+    if (!this.model()) {
+      return true;
+    }
+    if (this.apiAdapter()) {
+      return this.apiAdapter().isApiSpecChanged(this.viewSpec.apiSpec);
+    }
+    var currentData = this.modelData();
+    var newData = this.getModelData(this.viewSpec.modelSpec);
+    return currentData !== newData;
+  },
+  
+  getModelData: function(modelSpec) {
+    if (modelSpec.data) {
+      return modelSpec.data; // data can be specified in the modelSpec. This is static/ fixed data (derived from meta data).
+    }
+    // This method returns model's data based on rules applicable in most common scenario.
+    // Override this method is controller to return model data based on some other rule/ logic.
+    
+    // Rule 1: return parent selected data if parent is tree or collection and selected obj's uid is -1
+    var parentSelectedObj = this.getParentSelectedObj();
+    if (parentSelectedObj && Trillo.uidToId(parentSelectedObj.uid) === "-1") {
+      var parentViewType = this.parentView().viewSpec.type;
+      if (parentViewType === Trillo.ViewType.Tree || Trillo.isCollectionView(parentViewType)) {
+        // an object with -1 uid is selected in the tree or collection view. Use it as as the data for this model
+        // This is probably a newly created data and does not exists in the server.
+        return parentSelectedObj;
+      }
+    }
+    
+    // Rule 2: if "dataPath" is specified, look up data using it with respect to parent selected obj or parent data.
+    var parentContextData = this.getParentSelectedObj() || this.parentModelData();
+    var data = null;
+    if (parentContextData && modelSpec.dataPath) {
+      data = Trillo.getObjectValue(parentContextData, modelSpec.dataPath);
+      if (data) {
+        return data;
+      } else {
+        data = this.makeDefaultModelData();
+        if (data) {
+          Trillo.setObjectValue(parentContextData, modelSpec.dataPath, data);
+          return data;
+        }
+      } 
+    }
+   
+    // Rule 3: call makeDefaultModelData
+    data = this.makeDefaultModelData();
+    if (data) {
+      return data;
+    } else {
+      // Rule 4: there is not "dataPath" and this is an embedded rule, it is probably part or parent view (included from
+      // a different file to increase its reuse). Treat it like a part of parent and use parent data.
+      if (!modelSpec.dataPath && this.viewSpec.embedded) {
+        // use parent context data
+        return parentContextData;
+      }
+    }
+    
+    // return empty object
+    return {};
+  },
+  
+  makeDefaultModelData: function() {
+    var type = this.viewSpec.type;
+    if (Trillo.isCollectionView(type) || Trillo.isTreeView(type)) {
+      return [];
+    } else if (Trillo.isDetailView(type) || Trillo.isFormView(type)) {
+      return {};
+    } else {
+      return null;
+    }
+  },
+  
+  modelDataLoaded: function(myDeferred) {
+    this.postProcessModel(this._model);
+    myDeferred.resolve(this._model);
   },
   
   postProcessModel: function(model) {
@@ -2972,7 +3810,13 @@ Trillo.BaseController = Class.extend({
     if (this._handleClickGeneric($e.dataOrAttr("nm"), $e, this.getSelectedObj(), this)) {
       return true;
     }
-    Trillo.alert.notYetImplemented($e.dataOrAttr("nm"));
+    var actionName = $e.dataOrAttr("nm");
+    if (actionName && actionName !== "_home" && actionName !== "_appHome") {
+      var href = $e.attr("href");
+      if (!href || href === "#") {
+        Trillo.alert.notYetImplemented(actionName);
+      }
+    }
     return false;
   },
   
@@ -3002,14 +3846,6 @@ Trillo.BaseController = Class.extend({
     return false;
   },
   
-  clicked: function($e, selectedObj, ev) {
-    return this._handleClickGeneric(selectedObj.name, $e, selectedObj, this);
-  },
-  
-  dblClicked: function($e, selectedObj, ev) {
-    return this._handleClickGeneric('detail', $e, selectedObj, this);
-  },
-  
   /** Called by BizDelegate when it completes a delegated action 
    * options - may contain any app specific data such as original parameters, result of action etc.
    */
@@ -3017,12 +3853,13 @@ Trillo.BaseController = Class.extend({
    
   },
   
-  selectedObjChanged: function(selectedObj) {
-    // custom controllers can take some action by overriding this method.
+  getSelectedObj: function() {
+    return this._view ? this._view.getSelectedObj() : null;
   },
   
-  getSelectedObj: function() {
-    return null; // should be implemented by subclass
+  getParentSelectedObj: function() {
+    var pc = this.parentController();
+    return pc ? pc.getSelectedObj() : null;
   },
   
   getClosestSelectedObj: function() {
@@ -3034,29 +3871,75 @@ Trillo.BaseController = Class.extend({
     return res;
   },
   
-  updateViewSpec: function(viewSpec) {
-    
+  canSelectionChange: function(newObjOrName) {
+    return true;
   },
   
-  viewSelected: function(viewName) {
+  selectionChanging: function(newObjOrName) {
+  },
+  
+  selectedObjChanged: function(selectedObj) {
+    // custom controllers can take some action by overriding this method.
+  },
+
+  /*
+   * The difference between updateViewSpec & updateChildViewSpec is that
+   * "updateViewSpec" is called on controller by builder for its owner controller.
+   * "updateChildViewSpec" is called due to propagation by the owner or one of its parent.
+   * "updateChildViewSpec" is particularly useful for letting parent update the viewSpec (which is useful
+   * if parent needs to update its parameter list or preserve parameter list when navigating across peer.
+   * All such decisions are business logic specific.)
+   */
+  updateViewSpec: function(viewSpec) {
+    if (this.parentController()) {
+      return this.parentController().updateChildViewSpec(viewSpec);
+    }
+  },
+  
+  updateChildViewSpec: function(viewSpec) {
+    // only one level up, custom class is responsible for anything beyond it.
+  },
+  
+  
+  routeToSelectedView: function(viewName) {
     this.updateRoute(viewName);
   },
   
+  getSelected$Elem: function() {
+    return this._view.getSelected$Elem();
+  },
+  
+  getSelectedItem: function() {
+    return this._view.getSelectedItem();
+  },
+  
+  selectedItemChanged: function(newObjOrName) {
+  },
+  
   setParam: function(name, value) {
-    this.viewSpec.params[name] = value;
+    this.viewSpec.setParam(name, value);
     this.updateRoute();
   },
   
   getParam: function(name) {
-    return this.viewSpec.params[name];
+    return this.viewSpec.getParam(name);
   },
   
-  getRouteUpTo: function() {
+  getParams: function() {
+    return this.viewSpec.getParams();
+  },
+  
+  getRouteUpTo: function(includeQuery, skipIfDefault) {
     if (!this.viewSpec.isAppView) {
       var pc = this.parentController();
-      var route = pc ? pc.getRouteUpTo() : "";
-      var str = this.getMySubrouteAsStr();
-      route = route + (str.length > 0 && route.length > 1 ? "/" : "") + str;
+      var route = pc ? pc.getRouteUpTo(includeQuery) : "";
+      var parentNextView = pc ? pc.viewSpec.nextView : null;
+      if (!this.viewSpec.embedded && !this.viewSpec.autoLoad) {
+        var str = this.getMySubrouteAsStr(includeQuery);
+        if (!skipIfDefault || str !== parentNextView) {
+          route = route + (str.length > 0 && route.length > 1 ? "/" : "") + str;
+        }
+      }
       return route;
     }
     return Trillo.Config.pagePath;
@@ -3066,16 +3949,18 @@ Trillo.BaseController = Class.extend({
     return "";
   },
   
-  getMySubrouteAsStr: function() {
+  getMySubrouteAsStr: function(includeQuery) {
     var viewSpec = this.viewSpec;
     if (!viewSpec) return "";
     var str = viewSpec.getMyPath() + this.getInternalRoute();
     if (str.length === 0) return "";
-    var query = "";
-    $.each(viewSpec.params, function(key, value) {
-      query += (query.length ? ";" : "") + (key + "=" + value);
-    });
-    str += (query.length ? ";"  + query : "");
+    if (includeQuery) {
+      var query = "";
+      $.each(viewSpec.params, function(key, value) {
+        query += (query.length ? ";" : "") + (key + "=" + value);
+      });
+      str += (query.length ? ";"  + query : "");
+    }
     return str;
   },
   
@@ -3088,21 +3973,22 @@ Trillo.BaseController = Class.extend({
   },
 
   updateRoute: function(lastSegement) {
-    var route = this.getRouteUpTo();
+    var route = this.getRouteUpTo(true);
     if (lastSegement) {
       route += (route.length ? "/" : "") + lastSegement;
     }
     Trillo.router.routeTo(route, true);
   },
   
-  getMySelection: function() {
-    return this.getParam("sel");
-  },
-  
+  // Generally, the two parameters that control the display of a view are - a) its context (for example 
+  // a parent view which is using it); b) what is the current user selection (for example a row).
+  // If the current selection is available and it is uid then it is give preference.
+  // "sel" is also used for other selection such as tab name etc therefore a check is made
+  // if it is "uid" before preferring it.
   getSelectionUidOrContextUid: function() {
     var uid = this.getParam("sel");
     if (!uid || !Trillo.isUid(uid)) {
-      uid = this.getParam("ctx");
+      uid = this.getParam("uid");
     }
     if (!uid) {
       var p = this.parentController();
@@ -3111,8 +3997,10 @@ Trillo.BaseController = Class.extend({
     return uid;
   },
   
+  // returns context-uid of this view or
+  // selection (sel) or context uid in hierarchy.
   getContextUid: function() {
-    var uid = this.getParam("ctx");
+    var uid = this.getParam("uid");
     if (!uid) {
       var p = this.parentController();
       uid = p ? p.getSelectionUidOrContextUid() : null;
@@ -3120,10 +4008,8 @@ Trillo.BaseController = Class.extend({
     return uid;
   },
   
-  updateModel: function(modelSpec, params) {
-    if (this.updateModelCommonScenarios) {
-      this.updateModelCommonScenarios(modelSpec, params);
-    }
+  updateModelSpec: function(modelSpec) {
+    
   },
 
   showView: function(viewSpec) {
@@ -3147,8 +4033,8 @@ Trillo.BaseController = Class.extend({
     return myDeferred.promise();
   },
   
-  showViewByName: function(name, obj) {
-    var viewSpec = {name: name};
+  showViewByName: function(name, obj, options) {
+    var viewSpec = {name: name, options : options};
     if (obj) {
       viewSpec.modelSpec = {
           data: obj
@@ -3166,7 +4052,6 @@ Trillo.BaseController = Class.extend({
   },
   
   postSetup: function(view) {
-   
   },
   
   viewByName: function(name) {
@@ -3245,7 +4130,11 @@ Trillo.BaseController = Class.extend({
     }
   },
   
-  refreshView: function(modelLoadRequired) {
+  refreshAllViews: function(lisOfViews) {
+    // implemented by subclass
+  },
+  
+  refreshViews: function(lisOfViews) {
     // implemented by subclass
   },
   
@@ -3278,6 +4167,13 @@ Trillo.BaseController = Class.extend({
     }
   },
   
+  getAppRootElem: function() {
+    if (this._parentController) {
+      return this._parentController.getAppRootElem();
+    }
+    return this._view.$elem();
+  },
+  
   /** Requires this._super call */
   showNamedMessagesAsError: function(messages) {
   },
@@ -3285,19 +4181,37 @@ Trillo.BaseController = Class.extend({
   updateTitle: function() {
   },
   
-  modelStateChanged: function(undoLen, redoLen) {
+  changeManagerUpdated: function(undoLen, redoLen) {
   },
   
-  undoing: function(stateChange, firstInTx) {
+  undoing: function(change, firstInTx) {
   },
   
-  redoing: function(stateChange, firstInTx) {
+  redoing: function(change, firstInTx) {
   },
   
-  undone: function(stateChange, firstInTx) {
+  undone: function(change, firstInTx) {
   },
   
-  redone: function(stateChange, firstInTx) {
+  redone: function(change, firstInTx) {
+  },
+  
+  undoCompleted: function() {
+  },
+  
+  redoCompleted: function() {
+  },
+  
+  txStarted: function() {
+  },
+  
+  txEnding: function() {
+  },
+  
+  txEnded: function() {
+  },
+  
+  beforeShowContextMenu: function() {
   }
 });
 Trillo.Page = Class.extend({
@@ -3388,6 +4302,7 @@ Trillo.Page = Class.extend({
   _windowResized : function() {
     this.clearResizeTimer();
     if (this._view) {
+      Trillo.popoverManager.hideCurrentPopup();
       this._view.windowResized();
     }
   },
@@ -3417,6 +4332,20 @@ Trillo.Page = Class.extend({
     var target = this._view.controller().viewByName(option.targetViewName);
     if (target) {
       target.controller().fileUploadFailed(option);
+    }
+  },
+  
+  viewByName: function(name) {
+    return this._view ? this._view.controller().viewByName(name) : null;
+  },
+  
+  controllerByName: function(name) {
+    return this._view ? this._view.controller().controllerByName(name) : null;
+  },
+  
+  layoutContainers2: function() {
+    if (this._view) {
+      this._view.layoutContainers2();
     }
   }
  
@@ -3587,6 +4516,13 @@ Trillo.Main = Class.extend({
         (!(Trillo.Config.viewFileExtension) || Trillo.Config.viewFileExtension === "")) {
       Trillo.Config.viewFileExtension = ".html";
     }
+    
+    $(document).on('click.bs.collapse.data-api', '[data-toggle="collapse"]', function (e) {
+      var $this = $(this);
+      $(".js-navbar-toggle:not([data-target='" + $this.data("target") + "'])").each(function () {
+          $($(this).data("target")).removeClass("in").addClass('collapse');
+      });
+    });
   }
 
 });

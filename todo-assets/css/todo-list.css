@@ -1,7 +1,7 @@
 html { overflow: -moz-scrollbars-vertical; overflow-y: scroll; overflow-x: auto; height:100%}
 
 body {
-  padding-top: 55px;
+  padding-top: 100px;
 }
 
 table { empty-cells: show; }
@@ -63,8 +63,18 @@ form {
 
 .to-do-list-container {
   max-width: 700px;
-  margin: 15px auto;
-  padding: 0px 0px;
+  margin: 0px auto;
+  padding: 0px 0px 15px;
+}
+
+.to-do-list-tool-bar-c {
+  position: fixed;
+  width: 100%;
+  max-width: 700px;
+  z-index: 1001;
+  top: 50px;
+  background-color: #ffffff;
+  padding-top: 16px;
 }
 
 .to-do-list-tool-bar {
@@ -72,6 +82,7 @@ form {
   background-color: #f2f2f2;
   border: 1px solid #dadada;
   height: 34px;
+  
 }
 
 .todo-list-completed {

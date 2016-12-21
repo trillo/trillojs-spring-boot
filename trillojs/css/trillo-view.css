@@ -5,6 +5,61 @@
  * The visual styles can be changed (dimension and position related styles change may impact tree behavior)
  */
  
+ /* c3 overrides */
+
+.c3-tooltip th {
+  background-color: #000;
+  font-size: 12px;
+  padding: 3px 10px;
+  text-align: left;
+  color: #FFF;
+}
+
+.c3-tooltip td {
+  font-size: 11px;
+  padding: 3px 10px;
+  background-color: #fff;
+  border-left: 1px dotted #999;
+}
+
+.c3-tooltip td:first-child {
+  border-left-width: 0px;
+}
+
+.c3 svg {
+  font-family: inherit;
+}
+
+.c3-axis-x-label, .c3-axis-y-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.c3-chart-arc text {
+  font-size: 10px;
+}
+
+.c3-tooltip tr {
+  border-width: 0px;
+  border-bottom: 1px solid #CCC;
+}
+
+.c3-tooltip tr:last-child {
+  border-bottom-width: 0px;
+}
+
+.c3-tooltip {
+  border-width: 0px;
+}
+
+.c3-tooltip-container {
+  border: 1px solid #333;
+  border-radius: 2px;
+  padding-bottom: 1px;
+}
+
+/* trillo */
+ 
 .trillo-tree-container-container {
     height: 100%;
     position: relative;
@@ -14,6 +69,12 @@
     color: #222222;
     height: 100%;
     overflow: hidden;
+    width: 240px;
+}
+
+/* Use this when using non-native scrollbar. */
+.trillo-tree-container2 {
+    color: #222222;
     width: 240px;
 }
 
@@ -36,6 +97,8 @@
    cursor:pointer;
    padding:1px 1px 1px 1px;
    border: 1px solid transparent;
+   overflow: hidden;
+   text-overflow: ellipsis;
 }
 
 .trillo-tree .trillo-item-close.trillo-tree-item {
@@ -314,6 +377,8 @@
   font-weight: bold;
   padding: 5px 0px;
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .trillo-info-block .trillo-info {
@@ -332,41 +397,40 @@
 }
 
 .trillo-form-title {
-    color: #666;
-    font-family: Georgia,"Helvetica Neue",Helvetica,Arial,sans-serif;
-    font-size: 36px;
-    margin: 20px 0px;
+  color: #666;
+  font-size: 36px;
+  margin: 20px 0px;
 }
 
 .trillo-has-form-footer .trillo-form-container-inner {
-    border-bottom-width: 0;
-    padding-bottom: 0;
+  border-bottom-width: 0;
+  padding-bottom: 0;
 }
 
 .trillo-form-container-inner {
-    background-color: #FFFFFF;
-    border: 1px solid #DDDDDD;
-    margin: 19px auto 0;
-    padding: 0 20px;
-    width: 364px;
+  background-color: #FFFFFF;
+  border: 1px solid #DDDDDD;
+  margin: 19px auto 0;
+  padding: 0 20px;
+  width: 320px;
 }
 
 .trillo-form-container-inner-footer {
-    -moz-border-bottom-colors: none;
-    -moz-border-left-colors: none;
-    -moz-border-right-colors: none;
-    -moz-border-top-colors: none;
-    background-color: #EEEEEE;
-    border-color: #DDDDDD;
-    border-image: none;
-    border-right: 1px solid #DDDDDD;
-    border-style: solid;
-    border-width: 0 1px 1px;
-    font-size: 14px;
-    line-height: 20px;
-    margin: 0 auto 20px;
-    padding: 20px;
-    width: 364px;
+  -moz-border-bottom-colors: none;
+  -moz-border-left-colors: none;
+  -moz-border-right-colors: none;
+  -moz-border-top-colors: none;
+  background-color: #EEEEEE;
+  border-color: #DDDDDD;
+  border-image: none;
+  border-right: 1px solid #DDDDDD;
+  border-style: solid;
+  border-width: 0 1px 1px;
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0 auto 20px;
+  padding: 20px;
+  width: 320px;
 }
 
 /* --------------------------------------------------------------------------------------------------------- */
@@ -403,7 +467,6 @@
 }
 .trillo-dv-group-title {
     color: #666;
-    font-family: Georgia,"Helvetica Neue",Helvetica,Arial,sans-serif;
     font-size: 18px;
     padding: 11px;
     background-color:#f2f2f2;
@@ -476,7 +539,7 @@
   top:0px; 
   left:0px; 
   height:30px; 
-  width:390px; 
+  width:290px; 
   z-index:2; 
   opacity:0; 
   -moz-opacity:0; 
@@ -486,7 +549,7 @@
 .trillo-upload-form .trillo-file-name {
   z-index:1; 
   margin-bottom:0px;
-  width:290px;
+  width:190px;
   height:30px;
 }
 
@@ -501,15 +564,37 @@
   margin:18px 0px 0px 0px;
 }
 
-.trillo-upload-form .trillo-upload-dragdrop-msg {
-  background: none repeat scroll 0 0 #F2F2F2;
-  color: #AAAAAA;
-  font-size: 30px;
+.trillo-upload-form .trillo-upload-dragdrop-box {
+  margin:10px 0px 1px;
+  width:100%;
+  height: 100px;
+  border:1px solid #c2c2c2; 
+  border-radius: 4px;
+  background-color: #dddddd;
+  font-size:15px;
+  line-height: 18px;
+  padding: 41px 10px 0;
   font-weight: bold;
-  line-height: 40px;
-  padding: 40px 20px;
-  text-align: center;
-  width: 300px;
+  margin-bottom: 20px;
+}
+
+.trillo-upload-form .trillo-upload-dragdrop-box:hover {
+  background-color: #f2f2f2;
+}
+
+.trillo-upload-form .trillo-upload-dragdrop-box-separator {
+  margin: 20px 0px; 
+  border-top: 1px solid #aaaaaa; 
+  width: 100%; 
+  height: 1px
+}
+
+.trillo-upload-pb-notransition {
+  -webkit-transition: none !important;
+  -moz-transition: none !important;
+  -o-transition: none !important;
+  -ms-transition: none !important;
+  transition: none !important;
 }
 
 .trillo-upload-form .trillo-image-size-info {
@@ -521,11 +606,10 @@
 /* Styles used by charts. */
 
 .trillo-chart-c {
-  width: 47.5%;
+  width: 100%;
   float:left;
-  padding: 2% 10px;
-  height: 400px;
-  min-width: 350px;
+  padding: 10px;
+  min-width: 300px;
 }
 
 .trillo-chart-c .trillo-title {
@@ -536,17 +620,6 @@
   text-align: center;
 }
 
-/* Bootstrap override */
-.c3-axis-x-label, .c3-axis-y-label {
-  font-size: 12px;
-  font-weight: bold;
-  font-family: arial;
-}
-
-/* Bootstrap override */
-.c3-chart-arc text {
-  font-size: 11px;
-}
 
 /* --------------------------------------------------------------------------------------------------------- */
 
@@ -598,166 +671,148 @@
 
 /* --------------------------------------------------------------------------------------------------------- */
 
-/* Styles the view title bar (used for main title bar) */
+/* CSS styles for trillo list view. */
 
-.trillo-content-title-bar {
-  padding:5px 20px;
-  background-color:#f2f2f2;
-  border: 1px solid #dadada;
-  border-width: 0px 1px;
-  margin-bottom:5px;
-  position: fixed;
-  z-index: 1004;
-  top:55px;
-  left: 0px;
-  right:0;
-  height:40px;
-}
-
-.trillo-content-title-bar2{
-  padding:5px 20px 5px 0px;
-  background-color:#f2f2f2;
-  border: 1px solid #dadada;
-  border-width: 0px 1px;
-  margin-bottom:5px;
-  position: fixed;
-  z-index: 1004;
-  top:55px;
-  left: 0px;
-  right:0;
-  height:40px;
-}
-
-.trillo-content-title-bar2-left {
-  float:left;
-  width: 240px;
-  padding-left: 10px;
-  border-right: 1px solid #dadada;
-}
-
-.trillo-content-title-bar2-right {
-  float:left;
-}
-
-.trillo-view-title {
+.trillo-drop-down-list .trillo-selector-view {
   float: left;
-  font-size: 13px;
-  font-weight: bold;
-  line-height: 20px;
-  margin: 5px 5px 0 0;
-  /* border: 1px solid #e38d13; */
-  padding: 0px 12px 0px 12px;
 }
 
-.trillo-selector-view-c {
-  display: none;
-}
-
-.trillo-content-title-bar .trillo-selector-view-c, .trillo-content-title-bar2 .trillo-selector-view-c {
-  float:left;
-  margin-left: -6px;
-  left:6px;
-}
-
-.trillo-selector-view button {
-  font-weight: bold;
-  line-height: 22px;
-  margin-top: 5px;
-  padding: 0 12px;
-  border-radius: 0px;
-  border-width:0px;
-  margin-right: -1px;
-}
-
-.trillo-selector-view .dropdown-menu {
-  margin-top: -1px;
-}
-
-
-/* --------------------------------------------------------------------------------------------------------- */
-
-/* Styles related to toolbars and tools */
-
-.trillo-tool-bar {
-  padding:5px 20px;
-  background-color:#f2f2f2;
-  border: 1px solid #dadada;
-  margin-bottom:5px;
-  position: fixed;
-  z-index: 1003;
-  top:95px;
-  left: 0px;
-  right:0;
-  height:34px;
-}
-
-.trillo-tool-bar > div {
+.trillo-drop-down-list-tools  {
   float: left;
-  margin-right: 5px;
-}
-
-.trillo-tool-group > div {
-  float: left;
-  margin-right: 5px;
+  margin: 5px;
 }
 
 /* --------------------------------------------------------------------------------------------------------- */
 
-/* Styles used for the title of a panel */
+/* CSS styles for trillo tools toggle. */
 
-.trillo-bar-inner {
-  padding: 5px 10px;
-  background-color: #dddddd;
-  border: 1px solid #cccccc;
-  border-bottom-width: 0px;
-  height: 33px;
+/* This class is added when a view container is by default hidden due to media width (overlay mode).
+ * Such containers' visibility can be toggled using a button. This class can be used to cascade to 
+ * any other class to control visual property of the container in overlay mode v/s normal mode.
+*/
+.trillo-container-overlaid {
+}
+.trillo-cleared {
+  visibility: hidden;
 }
 
-.trillo-bar-inner .trillo-title-bar {
-  text-align: left;
-  width: 50%;
-  font-size: 14px;
-  float: left;
-  line-height: 22px;
+.trillo-generic-toggle {
+  padding: 5px;
+  margin-right: 15px;
+  background-color: transparent;
+  background-image: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  margin: 2px 0;
+  background-color: #4d80af;
 }
 
-.trillo-bar-inner .trillo-buttons-bar {
-  text-align: right;
-  width: 50%;
+.trillo-generic-toggle:focus {
+  outline: 0;
+}
+
+.trillo-generic-toggle .icon-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background-color: #fff;
+}
+
+.trillo-generic-toggle .icon-bar + .icon-bar {
+  margin-top: 4px;
+}
+
+.trillo-generic-toggle .icon-bar.icon-bar2 {
+  width: 18px;
+}
+
+.trillo-generic-toggle .icon-bar.icon-bar3 {
+  width: 14px;
+}
+
+@media (min-width: 768px) {
+  .trillo-generic-toggle {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------------------------------------- */
+
+/* Default CSS styles for trillo flex grid. */
+
+.trillo-flex-grid {
+  border-spacing: 10px; 
+  position: relative;
+}
+
+.trillo-flex-cell {
+  position: absolute;
+  border: 1px solid #eeeeee;
+  display: flex;
+  flex-direction: column; 
+}
+
+.trillo-cell-topbar {
+  flex: 0;
+  height:30px; 
+  border-bottom: 1px solid #eeeeee; 
+  background-color: #f2f2f2;
+  padding: 0px 5px;
+}
+
+.trillo-cell-topbar .fa {
+  margin: 8px 5px 8px 0px;
+  text-decoration: none;
+  color: #c2c2c2;
+}
+
+.trillo-cell-topbar .fa:hover, .trillo-cell-topbar .fa:focus {
+  color: #2a6496;
+}
+
+.trillo-cell-content {
+  flex: 1;
+  position:relative;
+}
+
+.trillo-cell-topbar-menu {
   float: right;
 }
 
-/* --------------------------------------------------------------------------------------------------------- */
-
-/* Title bar of popup list of logs (Task and Process). */
-
-.trillo-list-title-bar {
-  padding: 10px;
-  font-size: 17px;
-  font-weight:bold;
-  line-height: 23px;
+.trillo-cell-topbar-menu .dropdown-toggle {
+  margin: 8px 0px 8px 5px;
+  padding: 0 6px;
 }
 
-/* --------------------------------------------------------------------------------------------------------- */
+.trillo-cell-topbar-menu .dropdown-menu {
+  right: 0px;
+  font-size: 11px;
+  left: auto;
+  min-width: 100px;
+  margin-top: -8px;
+}
 
-/* CSS styles used in static pages. */
+.trillo-cell-topbar-menu .dropdown-menu > li > a, .trillo-cell-topbar-menu .dropdown-menu > li > span{
+  line-height: 11px;
+  white-space: nowrap;
+  margin: 6px 3px;
+  font-size: 11px;
+  padding: 3px;
+}
 
-.trillo-pointed {
-  position: relative;
-  display: inline-block;
-  font-family: 'Glyphicons Halflings';
-  font-style: normal;
-  font-weight: normal;
-  line-height: 1;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  margin: -10px 0px 0px -25px;
-  float: left;
+.trillo-flex-grid-iconbar {
+  height:30px;
+  padding:5px 10px;
+  width:100%;
+  z-index:10; 
+  position: fixed; 
+  bottom:0px; 
+  background-color:#eee
+}
+
+.trillo-flex-minified-icon {
   font-size: 20px;
-  color: #ff9933;
+  margin-right: 10px;
+  margin-left: 10px;
 }
-
-.trillo-pointed:before {
-  content: "\e127";
-}
-
